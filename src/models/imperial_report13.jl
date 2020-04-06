@@ -77,8 +77,8 @@ end
     # Sample variables
     τ ~ Exponential(0.03)
     y ~ arraydist([Exponential(1. / τ) for m = 1:num_countries])
-    ϕ ~ truncated(Normal(0, 5), 1e-6, 1000) # using 100 instead of `Inf` because numerical issues arose
-    κ ~ truncated(Normal(0, 0.5), 1e-6, 1000) # In Stan they don't make this truncated, but specify that `κ ≥ 0` and so it will be transformed
+    ϕ ~ truncated(Normal(0, 5), 1e-6, 100) # using 100 instead of `Inf` because numerical issues arose
+    κ ~ truncated(Normal(0, 0.5), 1e-6, 100) # In Stan they don't make this truncated, but specify that `κ ≥ 0` and so it will be transformed
     # κ ~ Turing.Bijectors.transformed(Normal(0, 0.5), Turing.Bijectors.Exp{0}())
     μ ~ product_distribution(truncated.(Normal.(2.4 .* ones(num_countries), κ .* ones(num_countries)), 0, Inf))
     # μ ~ Turing.Bijectors.transformed(product_distribution(Normal.(2.4 .* ones(num_countries), κ .* ones(num_countries))), Turing.Bijectors.Exp{1}())
