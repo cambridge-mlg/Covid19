@@ -2,6 +2,9 @@
 
 This project is mainly focused on reproducing COVID-19 related models from papers.
 
+## IMPORTANT!!!
+- For this to work, [this PR needs to be merged in Bijectors.jl and version needs to be bumped](https://github.com/TuringLang/Bijectors.jl/pull/101)
+
 ## Models
 ### Imperial College COVID-19 Response Team (Report 13): Estimating the number of infections and the impact of non-pharmaceutical interventions on COVID-19 in 11 European countries
 To run:
