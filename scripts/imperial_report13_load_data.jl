@@ -4,9 +4,19 @@
 using Dates
 using DataFrames, CSV
 
+using DrWatson
+using LibGit2
+
 # TODO: make this a much nicer "DataLoader" or something
 
-const DATA_DIR = "../external/covid19model/data/"
+const IMPERIAL_PROJ_DIR = projectdir("external/covid19model/")
+const DATA_DIR = joinpath(IMPERIAL_PROJ_DIR, "data")
+
+if !ispath(DATA_DIR)
+    mkpath(projectdir("external"))
+    LibGit2.clone("https://github.com/ImperialCollegeLondon/covid19model.git", IMPERIAL_PROJ_DIR)
+end
+
 df = CSV.read(joinpath(DATA_DIR, "COVID-19-up-to-date.csv"))
 
 countries = [
@@ -193,6 +203,11 @@ data = merge(
     data,
     (num_countries = length(data.covariates), num_impute = 6, num_total_days = num_total_days_default)
 )
+
+using Serialization
+mkpath(projectdir("out"))
+open(io -> serialize(io, data), projectdir("out", "data.jls"), "w")
+
 
 # TODO: save the data
 # @assert data.num_obs_countries .== [37, 62, 43, 49, 46, 51, 34, 40, 36, 40, 44]
