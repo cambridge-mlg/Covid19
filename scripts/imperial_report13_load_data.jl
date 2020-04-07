@@ -82,14 +82,16 @@ for country in countries
     df_country = sort(df_country, :date)                              # sort by time
 
     # Compute the "beginning" of the epidemic in `country`
-    index = findfirst(==(1), df_country.cases .> 0)            # find first index where we have cases
+    index_first_case = findfirst(==(1), df_country.cases .> 0)            # find first index where we have cases
     index_first10_deaths = findfirst(cumsum(df_country.deaths) .≥ 10)        # find index where deaths ≥ 10
     index_first10_deaths_month_prior = index_first10_deaths - 30                                # consider the month before reaching 10 deaths
 
-    println("First non-zero cases is on day $(index), and 30 days before 5 days is day $(index_first10_deaths_month_prior)")
+    println("First non-zero cases is on day $(index_first_case), and 30 days before 5 days is day $(index_first10_deaths_month_prior)")
     df_country = df_country[index_first10_deaths_month_prior:end, :]
 
     # FIXME: What if `index_first10_deaths + 1 - index_first10_deaths_month_prior` < 1? Shouldn't we have a `max` here?
+    # TODO: uhmm this is always going to be `31`? Since `index_first10_deaths_month_prior`
+    # is defined to be index_first10_deaths - 30 o.O
     push!(data.epidemic_start, index_first10_deaths + 1 - index_first10_deaths_month_prior)
 
     for covariate in names(covariates1)
@@ -211,3 +213,4 @@ open(io -> serialize(io, data), projectdir("out", "data.jls"), "w")
 
 # TODO: save the data
 # @assert data.num_obs_countries .== [37, 62, 43, 49, 46, 51, 34, 40, 36, 40, 44]
+data
