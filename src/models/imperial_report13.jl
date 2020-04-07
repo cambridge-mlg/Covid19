@@ -75,14 +75,19 @@ end
     @argcheck size(serial_intervals) == (num_total_days, )
 
     # Sample variables
-    τ ~ Exponential(0.03)
-    y ~ arraydist([Exponential(1. / τ) for m = 1:num_countries])
+    τ ~ Exponential(1 / 0.03) # Exponential has inverse parameterization of the one in Stan
+
+    y = [TV(undef, num_impute) for m = 1:num_countries]
+    for m = 1:num_countries
+        y[m] .~ Exponential(τ)
+    end
+    # y ~ arraydist(fill(Exponential(τ), (num_countries, num_impute)))
     ϕ ~ truncated(Normal(0, 5), 1e-6, 100) # using 100 instead of `Inf` because numerical issues arose
     κ ~ truncated(Normal(0, 0.5), 1e-6, 100) # In Stan they don't make this truncated, but specify that `κ ≥ 0` and so it will be transformed
     # κ ~ Turing.Bijectors.transformed(Normal(0, 0.5), Turing.Bijectors.Exp{0}())
-    μ ~ product_distribution(truncated.(Normal.(2.4 .* ones(num_countries), κ .* ones(num_countries)), 0, Inf))
+    μ ~ product_distribution(fill(truncated(Normal(2.4, κ), 0, Inf), num_countries))
     # μ ~ Turing.Bijectors.transformed(product_distribution(Normal.(2.4 .* ones(num_countries), κ .* ones(num_countries))), Turing.Bijectors.Exp{1}())
-    α ~ product_distribution([GammaMeanCv(.5, 1) for i = 1:num_covariates])
+    α ~ product_distribution(fill(Gamma(.5, 1), num_covariates))
 
     # Transforming variables
     daily_cases_pred = [TV(undef, num_total_days) for m = 1:num_countries]
