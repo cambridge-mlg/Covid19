@@ -1,9 +1,12 @@
 module Covid19
 
-export imperial_model_report13,
+export ImperialReport13,
     NegativeBinomial2,
     GammaMeanCv
 
-include("models/imperial_report13.jl")
+include("utils.jl")
+
+# Different related reports
+include("imperial-report13/ImperialReport13.jl")
 
 end # module
