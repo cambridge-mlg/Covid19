@@ -155,7 +155,7 @@ end
     μ ~ product_distribution(fill(truncated(Normal(3.28, κ), 0, Inf), num_countries))
     # μ ~ Turing.Bijectors.transformed(product_distribution(Normal.(2.4 .* ones(num_countries), κ .* ones(num_countries))), Turing.Bijectors.Exp{1}())
     α_hier ~ product_distribution(fill(Gamma(.1667, 1), num_covariates))
-    α = α_hier .- log(1.05 / 6.)
+    α = α_hier .- log(1.05) / 6.
 
     # TODO: fixed ifr noise over time? Seems a bit strange, no?
     ifr_noise ~ product_distribution(fill(truncated(Normal(1., 0.1), 1e-6, 1000), num_countries))
