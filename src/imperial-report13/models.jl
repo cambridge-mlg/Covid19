@@ -152,8 +152,13 @@ end
     ϕ ~ truncated(Normal(0, 5), 1e-6, 100) # using 100 instead of `Inf` because numerical issues arose
     κ ~ truncated(Normal(0, 0.5), 1e-6, 100) # In Stan they don't make this truncated, but specify that `κ ≥ 0` and so it will be transformed
     # κ ~ Turing.Bijectors.transformed(Normal(0, 0.5), Turing.Bijectors.Exp{0}())
-    μ ~ product_distribution(fill(truncated(Normal(3.28, κ), 0, Inf), num_countries))
+
+    # HACK: often ran into numerical issues when transforming from `truncated` in this case...
     # μ ~ Turing.Bijectors.transformed(product_distribution(Normal.(2.4 .* ones(num_countries), κ .* ones(num_countries))), Turing.Bijectors.Exp{1}())
+    # μ ~ product_distribution(fill(truncated(Normal(3.28, κ), 1e-6, Inf), num_countries))
+    μ₀ ~ product_distribution(fill(Normal(3.28, κ), num_countries))
+    μ = abs.(μ₀)
+
     α_hier ~ product_distribution(fill(Gamma(.1667, 1), num_covariates))
     α = α_hier .- log(1.05) / 6.
 
