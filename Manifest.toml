@@ -94,7 +94,7 @@ version = "0.5.0"
 
 [[Bijectors]]
 deps = ["ArgCheck", "Compat", "Distributions", "LinearAlgebra", "MappedArrays", "NNlib", "Random", "Reexport", "Requires", "Roots", "SparseArrays", "Statistics", "StatsFuns"]
-git-tree-sha1 = "26464085bfec149aa16507e4f42b87ffd9929624"
+git-tree-sha1 = "439a97de186ac103e62e9699726f57b11d9baf6f"
 repo-rev = "tor/using-bijectors-in-link-and-invlink"
 repo-url = "https://github.com/TuringLang/Bijectors.jl.git"
 uuid = "76274a88-744f-5084-9051-94815aaf08c4"
@@ -255,10 +255,12 @@ uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
 version = "0.23.2"
 
 [[DistributionsAD]]
-deps = ["Combinatorics", "Compat", "DiffRules", "Distributions", "FillArrays", "ForwardDiff", "LinearAlgebra", "MacroTools", "NaNMath", "PDMats", "Random", "ReverseDiff", "SpecialFunctions", "StaticArrays", "StatsBase", "StatsFuns", "Tracker", "Zygote", "ZygoteRules"]
-git-tree-sha1 = "36a22eb28149ee922925e0fe3f19f77a9e645d71"
+deps = ["Combinatorics", "Compat", "DiffRules", "Distributions", "FillArrays", "ForwardDiff", "LinearAlgebra", "MacroTools", "NaNMath", "PDMats", "Random", "Requires", "SpecialFunctions", "StaticArrays", "StatsBase", "StatsFuns", "Tracker", "Zygote", "ZygoteRules"]
+git-tree-sha1 = "40246145bbae39c38f40968f15795b0ba1c92f56"
+repo-rev = "mt/neurips"
+repo-url = "https://github.com/TuringLang/DistributionsAD.jl.git"
 uuid = "ced4e74d-a319-5a8a-b0ac-84af2272839c"
-version = "0.4.10"
+version = "0.5.0"
 
 [[DocStringExtensions]]
 deps = ["LibGit2", "Markdown", "Pkg", "Test"]
@@ -274,7 +276,9 @@ version = "1.10.2"
 
 [[DynamicPPL]]
 deps = ["AbstractMCMC", "Bijectors", "Distributions", "MacroTools", "ZygoteRules"]
-git-tree-sha1 = "ef91448d0e730589dd085b14fa15f03062aa47a6"
+git-tree-sha1 = "846a8e1a98801a6eee4d4c15b62bba44fae93217"
+repo-rev = "mt/neurips2"
+repo-url = "https://github.com/TuringLang/DynamicPPL.jl.git"
 uuid = "366bfd00-2699-11ea-058f-f148b4cae6d8"
 version = "0.6.0"
 
@@ -484,6 +488,7 @@ uuid = "1d6d02ad-be62-4b6b-8a6d-2f90e265016e"
 version = "0.1.2"
 
 [[LibGit2]]
+deps = ["Printf"]
 uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 
 [[LibVPX_jll]]
@@ -805,7 +810,9 @@ version = "1.0.1"
 
 [[ReverseDiff]]
 deps = ["DiffResults", "DiffRules", "ForwardDiff", "FunctionWrappers", "LinearAlgebra", "MacroTools", "NaNMath", "Random", "SpecialFunctions", "StaticArrays", "Statistics"]
-git-tree-sha1 = "1d4a01bc6fe181e4fef376affb3f90bad584b0f4"
+git-tree-sha1 = "35f8c6e1cc461ae8208ff6e4ab722a0aad2cf678"
+repo-rev = "mt/array_funcs"
+repo-url = "https://github.com/JuliaDiff/ReverseDiff.jl.git"
 uuid = "37e2e3b7-166d-5795-8a7a-e32c996b4267"
 version = "1.2.0"
 
@@ -948,8 +955,8 @@ version = "0.3.8"
 
 [[Turing]]
 deps = ["AbstractMCMC", "AdvancedHMC", "AdvancedMH", "Bijectors", "Distributions", "DistributionsAD", "DocStringExtensions", "DynamicPPL", "EllipticalSliceSampling", "ForwardDiff", "Libtask", "LinearAlgebra", "LogDensityProblems", "MCMCChains", "ProgressLogging", "Random", "Reexport", "Requires", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Tracker"]
-git-tree-sha1 = "2650f7453bbf566988135ea16052efbcbc2b110e"
-repo-rev = "tor/modelling-temporary"
+git-tree-sha1 = "48575a469b9c55af505152c8b7628ac8db9378ce"
+repo-rev = "mt/modelling-temporary"
 repo-url = "https://github.com/TuringLang/Turing.jl.git"
 uuid = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
 version = "0.11.0"
