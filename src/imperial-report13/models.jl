@@ -40,7 +40,7 @@ using ArgCheck
 
     y = [TV(undef, num_impute) for m = 1:num_countries]
     for m = 1:num_countries
-        y[m] .~ Exponential(τ)
+        y[m] ~ filldist(Exponential(τ), num_impute)
     end
     # y ~ arraydist(fill(Exponential(τ), (num_countries, num_impute)))
     ϕ ~ truncated(Normal(0, 5), 1e-6, 100) # using 100 instead of `Inf` because numerical issues arose
@@ -114,7 +114,6 @@ using ArgCheck
     return daily_cases_pred, expected_daily_deaths, Rₜ
 end
 
-
 @model model_v2(
     num_countries,     # [Int] num. of countries
     num_impute,        # [Int] num. of days for which to impute infections
@@ -148,7 +147,7 @@ end
 
     # Sample variables
     τ ~ Exponential(1 / 0.03) # Exponential has inverse parameterization of the one in Stan
-    y ~ product_distribution(fill(Exponential(τ), num_countries))
+    y ~ filldist(Exponential(τ), num_countries)
     ϕ ~ truncated(Normal(0, 5), 1e-6, 100) # using 100 instead of `Inf` because numerical issues arose
     κ ~ truncated(Normal(0, 0.5), 1e-6, 100) # In Stan they don't make this truncated, but specify that `κ ≥ 0` and so it will be transformed
     # κ ~ Turing.Bijectors.transformed(Normal(0, 0.5), Turing.Bijectors.Exp{0}())
@@ -156,14 +155,13 @@ end
     # HACK: often ran into numerical issues when transforming from `truncated` in this case...
     # μ ~ Turing.Bijectors.transformed(product_distribution(Normal.(2.4 .* ones(num_countries), κ .* ones(num_countries))), Turing.Bijectors.Exp{1}())
     # μ ~ product_distribution(fill(truncated(Normal(3.28, κ), 1e-6, Inf), num_countries))
-    μ₀ ~ product_distribution(fill(Normal(3.28, κ), num_countries))
-    μ = abs.(μ₀)
+    μ ~ filldist(truncated(Normal(3.28, κ), 1e-6, Inf), num_countries)
 
-    α_hier ~ product_distribution(fill(Gamma(.1667, 1), num_covariates))
+    α_hier ~ filldist(Gamma(.1667, 1), num_covariates)
     α = α_hier .- log(1.05) / 6.
 
     # TODO: fixed ifr noise over time? Seems a bit strange, no?
-    ifr_noise ~ product_distribution(fill(truncated(Normal(1., 0.1), 1e-6, 1000), num_countries))
+    ifr_noise ~ filldist(truncated(Normal(1., 0.1), 1e-6, 1000), num_countries)
 
     # Transforming variables
     daily_cases_pred = [TV(undef, num_total_days) for m = 1:num_countries]
@@ -199,7 +197,7 @@ end
             cases_pred_m[t] = cases_pred_m[t - 1] + y[m]
         end
         daily_cases_pred_m[1:num_impute] .= y[m]
-        Rₜ_m .= μ[m] * exp.(- covariates[m] * α)
+        Rₜ_m .= μ[m] * exp.(- (covariates[m] * α))
         # @info "hi1"
 
         ### Stan-equivalent ###        
@@ -216,7 +214,7 @@ end
             # cases_pred = sum(daily_cases_pred_m[1:(t - 1)])
             cases_pred_m[t] = cases_pred_m[t - 1] + daily_cases_pred_m[t - 1]
 
-            Rₜ_adj = ((pop_m - cases_pred_m[t]) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
+            Rₜ_adj = (max(0, pop_m - cases_pred_m[t]) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
             daily_cases_pred_m[t] = Rₜ_adj * sum([daily_cases_pred_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1)])
         end
         # @info "hi2"
