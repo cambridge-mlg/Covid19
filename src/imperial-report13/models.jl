@@ -406,7 +406,7 @@ end
     ifr_noise ~ filldist(truncated(Normal(1., 0.1), 1e-6, 1000), num_countries)
     
     # If we don't want to predict the future, we only need to compute up-to time-step `num_obs_countries[m]`
-    last_time_steps = predict ? fill(num_total_days, num_obs_countries) : num_obs_countries
+    last_time_steps = predict ? fill(num_total_days, num_total_days) : num_obs_countries
 
     # Transforming variables
     daily_cases_pred = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
