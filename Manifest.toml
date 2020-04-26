@@ -276,7 +276,7 @@ version = "1.10.2"
 
 [[DynamicPPL]]
 deps = ["AbstractMCMC", "Bijectors", "Distributions", "MacroTools", "ZygoteRules"]
-git-tree-sha1 = "846a8e1a98801a6eee4d4c15b62bba44fae93217"
+git-tree-sha1 = "0267d956be6f7be2022977d1fbdf764e0adc4c02"
 repo-rev = "mt/neurips2"
 repo-url = "https://github.com/TuringLang/DynamicPPL.jl.git"
 uuid = "366bfd00-2699-11ea-058f-f148b4cae6d8"
@@ -786,15 +786,15 @@ uuid = "c84ed2f1-dad5-54f0-aa8e-dbefe2724439"
 version = "0.4.0"
 
 [[RecipesBase]]
-git-tree-sha1 = "d352369b00094cadb43d694333b051b3d55abaf2"
+git-tree-sha1 = "54f8ceb165a0f6d083f0d12cb4996f5367c6edbc"
 uuid = "3cdcf5f2-1ef4-517c-9805-6587b60abb01"
-version = "1.0.0"
+version = "1.0.1"
 
 [[RecipesPipeline]]
 deps = ["Dates", "PlotUtils", "RecipesBase"]
-git-tree-sha1 = "9b8b3682b70f9a0854d36fc43aa34dd8c4d5c0cb"
+git-tree-sha1 = "ef7f27f6ff158bada82b1b29022cc5eeda893977"
 uuid = "01d81517-befc-4cb6-b9ec-a95719d0359c"
-version = "0.1.4"
+version = "0.1.6"
 
 [[Reexport]]
 deps = ["Pkg"]
@@ -871,9 +871,9 @@ version = "0.10.0"
 
 [[StaticArrays]]
 deps = ["LinearAlgebra", "Random", "Statistics"]
-git-tree-sha1 = "5a3bcb6233adabde68ebc97be66e95dcb787424c"
+git-tree-sha1 = "4118cba3529e99af61aea9a83f7bfd3cff5ffb28"
 uuid = "90137ffa-7385-5640-81b9-e52037218182"
-version = "0.12.1"
+version = "0.12.2"
 
 [[Statistics]]
 deps = ["LinearAlgebra", "SparseArrays"]
@@ -955,7 +955,7 @@ version = "0.3.8"
 
 [[Turing]]
 deps = ["AbstractMCMC", "AdvancedHMC", "AdvancedMH", "Bijectors", "Distributions", "DistributionsAD", "DocStringExtensions", "DynamicPPL", "EllipticalSliceSampling", "ForwardDiff", "Libtask", "LinearAlgebra", "LogDensityProblems", "MCMCChains", "ProgressLogging", "Random", "Reexport", "Requires", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Tracker"]
-git-tree-sha1 = "48575a469b9c55af505152c8b7628ac8db9378ce"
+git-tree-sha1 = "adb5b5b8c80b923c70a31070bede473450830d3f"
 repo-rev = "mt/modelling-temporary"
 repo-url = "https://github.com/TuringLang/Turing.jl.git"
 uuid = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
@@ -1005,9 +1005,9 @@ version = "1.2.11+9"
 
 [[Zygote]]
 deps = ["AbstractFFTs", "ArrayLayouts", "DiffRules", "FillArrays", "ForwardDiff", "IRTools", "InteractiveUtils", "LinearAlgebra", "MacroTools", "NNlib", "NaNMath", "Random", "Requires", "SpecialFunctions", "Statistics", "ZygoteRules"]
-git-tree-sha1 = "014e1f208bd5b43e26448ca31d971053f58bc20a"
+git-tree-sha1 = "08ee0b7796c4c9ce644b9ecc326f3e047486baeb"
 uuid = "e88e6eb3-aa80-5325-afca-941959d7151f"
-version = "0.4.15"
+version = "0.4.17"
 
 [[ZygoteRules]]
 deps = ["MacroTools"]
