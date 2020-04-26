@@ -458,7 +458,7 @@ end
             cases_pred_m[t] = cases_pred_m[t - 1] + daily_cases_pred_m[t - 1]
 
             Rₜ_adj = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
-            daily_cases_pred_m[t] = Rₜ_adj * sum([daily_cases_pred_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1)])
+            daily_cases_pred_m[t] = Rₜ_adj * sum(daily_cases_pred_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1))
         end
 
         ### Stan-equivalent ###
@@ -471,7 +471,7 @@ end
         # }
         expected_daily_deaths_m[1] = 1e-15 * daily_cases_pred_m[1]
         for t = 2:last_time_step
-            expected_daily_deaths_m[t] = sum([daily_cases_pred_m[τ] * πₘ[t - τ] * ifr_noise[m] for τ = 1:(t - 1)])
+            expected_daily_deaths_m[t] = sum(daily_cases_pred_m[τ] * πₘ[t - τ] * ifr_noise[m] for τ = 1:(t - 1))
         end
     end
 
