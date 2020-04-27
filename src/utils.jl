@@ -52,3 +52,10 @@ function GammaMeanCv(mean, cv)
     θ = mean / k
     return Gamma(k, θ)
 end
+
+# Fix for stuff
+using Distributions, Random, DistributionsAD
+
+function Distributions.rand(rng::Random.AbstractRNG, d::DistributionsAD.FillVectorOfUnivariate)
+    return rand(rng, d.v.value, length(d))
+end
