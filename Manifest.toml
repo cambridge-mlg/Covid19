@@ -261,10 +261,10 @@ uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
 version = "0.23.2"
 
 [[DistributionsAD]]
-deps = ["Combinatorics", "Compat", "DiffRules", "Distributions", "FillArrays", "ForwardDiff", "LinearAlgebra", "MacroTools", "NaNMath", "PDMats", "Random", "Requires", "SpecialFunctions", "StaticArrays", "StatsBase", "StatsFuns", "Tracker", "Zygote", "ZygoteRules"]
-git-tree-sha1 = "5bfe8a9b5e1f9d645436b76ec6a308806d764dba"
+deps = ["Combinatorics", "Compat", "DiffRules", "Distributions", "FillArrays", "ForwardDiff", "LinearAlgebra", "MacroTools", "NaNMath", "PDMats", "Random", "ReverseDiff", "SpecialFunctions", "StaticArrays", "StatsBase", "StatsFuns", "Tracker", "Zygote", "ZygoteRules"]
+git-tree-sha1 = "36a22eb28149ee922925e0fe3f19f77a9e645d71"
 uuid = "ced4e74d-a319-5a8a-b0ac-84af2272839c"
-version = "0.5.0"
+version = "0.4.10"
 
 [[DocStringExtensions]]
 deps = ["LibGit2", "Markdown", "Pkg", "Test"]
@@ -490,6 +490,7 @@ uuid = "1d6d02ad-be62-4b6b-8a6d-2f90e265016e"
 version = "0.1.2"
 
 [[LibGit2]]
+deps = ["Printf"]
 uuid = "76f85450-5226-5b5a-8eaa-529ad045b433"
 
 [[LibVPX_jll]]
@@ -954,8 +955,8 @@ version = "0.3.8"
 
 [[Turing]]
 deps = ["AbstractMCMC", "AdvancedHMC", "AdvancedMH", "Bijectors", "Distributions", "DistributionsAD", "DocStringExtensions", "DynamicPPL", "EllipticalSliceSampling", "ForwardDiff", "Libtask", "LinearAlgebra", "LogDensityProblems", "MCMCChains", "ProgressLogging", "Random", "Reexport", "Requires", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Tracker"]
-git-tree-sha1 = "adb5b5b8c80b923c70a31070bede473450830d3f"
-repo-rev = "mt/modelling-temporary"
+git-tree-sha1 = "2650f7453bbf566988135ea16052efbcbc2b110e"
+repo-rev = "tor/modelling-temporary"
 repo-url = "https://github.com/TuringLang/Turing.jl.git"
 uuid = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
 version = "0.11.0"
