@@ -380,6 +380,7 @@ end
     epidemic_start,    # [AbstractVector{<:Int}]
     population,        # [AbstractVector{<:Real}]
     serial_intervals,  # [AbstractVector{<:Real}] fixed pre-calculated serial interval (SI) using empirical data from Neil
+    lockdown_index,    # [Int] the index for the `lockdown` covariate in `covariates`
     predict=false,     # [Bool] if `false`, will only compute what's needed to `observe` but not more
     ::Type{TV} = Vector{Float64}
 ) where {TV} = begin
@@ -406,7 +407,11 @@ end
     ifr_noise ~ filldist(truncated(Normal(1., 0.1), 1e-6, 1000), num_countries)
     
     # If we don't want to predict the future, we only need to compute up-to time-step `num_obs_countries[m]`
-    last_time_steps = predict ? fill(num_total_days, num_total_days) : num_obs_countries
+    last_time_steps = predict ? fill(num_total_days, num_countries) : num_obs_countries
+
+    # lockdown-related
+    γ ~ truncated(Normal(0, 0.2), 0, Inf)
+    lockdown ~ filldist(Normal(0, γ), num_countries)
 
     # Transforming variables
     daily_cases_pred = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
@@ -443,7 +448,7 @@ end
         daily_cases_pred_m[1:num_impute] .= y[m]
         
         xs = covariates[m][1:last_time_step, :] # extract covariates for the wanted time-steps
-        Rₜ_m .= μ[m] * exp.(xs * (-α))
+        Rₜ_m .= μ[m] * exp.(xs * (-α) + (- lockdown[m]) * xs[:, lockdown_index])
 
         ### Stan-equivalent ###        
         # for (i in (N0+1):N2) {
