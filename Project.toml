@@ -5,6 +5,7 @@ version = "0.1.0"
 
 [deps]
 ArgCheck = "dce04be8-c92d-5529-be00-80e4d2c0e197"
+ArgParse = "c7e460c6-2fb9-53a9-8c5b-16f535851c63"
 ArviZ = "131c737c-5715-5e2e-ad31-c244f01c1dc7"
 Bijectors = "76274a88-744f-5084-9051-94815aaf08c4"
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
