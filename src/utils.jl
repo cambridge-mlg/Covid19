@@ -1,4 +1,4 @@
-using Distributions
+using Turing, Distributions
 
 """
     NegativeBinomial2(μ, ϕ)
@@ -51,4 +51,43 @@ function GammaMeanCv(mean, cv)
     k = cv^(-2)
     θ = mean / k
     return Gamma(k, θ)
+end
+
+"""
+    generated_quantities(m::Turing.Model, c::Turing.MCMCChains.Chains)
+
+Executes `m` for each of the samples in `c` and returns an array of the values returned by the `m` for each sample.
+
+## Examples
+Often you might have additional quantities computed inside the model that you want to inspect, e.g.
+```julia
+@model demo(x) = begin
+    # sample and observe
+    θ ~ Prior()
+    x ~ Likelihood()
+
+    return interesting_quantity(θ, x)
+end
+
+m = demo(data)
+chain = sample(m, alg, n)
+
+# To inspect the `interesting_quantity(θ, x)` where `θ` is replaced by samples from the posterior/`chain`:
+generated_quantities(m, chain)
+```
+"""
+function generated_quantities(m::Turing.Model, c::Turing.MCMCChains.Chains)
+    varinfo = Turing.DynamicPPL.VarInfo(m)
+
+    map(1:length(c)) do i
+        Turing.DynamicPPL._setval!(varinfo, c[i])
+        m(varinfo)
+    end
+end
+
+"Converts a vector of tuples to a tuple of vectors."
+function vectup2tupvec(ts::AbstractVector{<:Tuple})
+    k = length(first(ts))
+    
+    return tuple([[t[i] for t in ts] for i = 1:k]...)
 end
