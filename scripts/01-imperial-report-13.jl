@@ -155,7 +155,15 @@ data.num_countries
 
 model_def = ImperialReport13.model_v2_vectorized_multithreaded
 
+parameters = (
+    warmup = parsed_args["num-warmup"],
+    steps = parsed_args["num-samples"],
+    model = "imperial-report13-v2-vectorized-non-predict-$(nthreads())-threads",
+    seed = parsed_args["seed"],
+    with_lockdown = true
+)
 Random.seed!(parameters.seed);
+
 m = model_def(
     data.num_countries,
     data.num_impute,
@@ -170,14 +178,6 @@ m = model_def(
     data.serial_intervals,
     lockdown_index
 );
-
-parameters = (
-    warmup = parsed_args["num-warmup"],
-    steps = parsed_args["num-samples"],
-    model = "imperial-report13-v2-vectorized-non-predict-$(nthreads())-threads",
-    seed = parsed_args["seed"],
-    with_lockdown = true
-)
 
 @info parameters
 chain = sample(m, NUTS(parameters.warmup, 0.95; max_depth=10), parameters.steps + parameters.warmup);
