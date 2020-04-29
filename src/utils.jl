@@ -1,22 +1,39 @@
-using Distributions
+using Turing, Distributions
 
 """
-    NegativeBinomial2(μ, σ²)
+    NegativeBinomial2(μ, ϕ)
 
 Mean-variance parameterization of `NegativeBinomial`.
 
+## Derivation
+`NegativeBinomial` from `Distributions.jl` is parameterized following [1]. With the parameterization in [2], we can solve
+for `r` (`n` in [1]) and `p` by matching the mean and the variance given in `μ` and `ϕ`.
+
+We have the following two equations
+
+(1) μ = r (1 - p) / p
+(2) μ + μ^2 / ϕ = r (1 - p) / p^2
+
+Substituting (1) into the RHS of (2):
+  μ + (μ^2 / ϕ) = μ / p
+⟹ 1 + (μ / ϕ) = 1 / p
+⟹ p = 1 / (1 + μ / ϕ)
+⟹ p = (1 / (1 + μ / ϕ)
+
+Then in (1) we have
+  μ = r (1 - (1 / 1 + μ / ϕ)) * (1 + μ / ϕ)
+⟹ μ = r ((1 + μ / ϕ) - 1)
+⟹ r = ϕ
+
+Hence, the resulting map is `(μ, ϕ) ↦ NegativeBinomial(ϕ, 1 / (1 + μ / ϕ))`.
+
 ## References
-- https://en.wikipedia.org/wiki/Negative_binomial_distribution#Alternative_formulations
-- https://mc-stan.org/docs/2_20/functions-reference/nbalt.html
+[1] https://reference.wolfram.com/language/ref/NegativeBinomialDistribution.html
+[2] https://mc-stan.org/docs/2_20/functions-reference/nbalt.html
 """
 function NegativeBinomial2(μ, ϕ)
-    p = 1 / (1 + ϕ / μ)
+    p = 1 / (1 + μ / ϕ)
     r = ϕ
-
-    # # TODO remove
-    # (p ≤ .0 || p > 1.) && @info "r < 0: $(ReverseDiff.value(r)) for inputs" ReverseDiff.value(μ) ReverseDiff.value(ϕ)
-
-    # @info "NegativeBinomial2" ReverseDiff.value(σ²) ReverseDiff.value(μ) ReverseDiff.value(ϕ) ReverseDiff.value(p) ReverseDiff.value(r)
 
     return NegativeBinomial(r, p)
 end
@@ -34,4 +51,43 @@ function GammaMeanCv(mean, cv)
     k = cv^(-2)
     θ = mean / k
     return Gamma(k, θ)
+end
+
+"""
+    generated_quantities(m::Turing.Model, c::Turing.MCMCChains.Chains)
+
+Executes `m` for each of the samples in `c` and returns an array of the values returned by the `m` for each sample.
+
+## Examples
+Often you might have additional quantities computed inside the model that you want to inspect, e.g.
+```julia
+@model demo(x) = begin
+    # sample and observe
+    θ ~ Prior()
+    x ~ Likelihood()
+
+    return interesting_quantity(θ, x)
+end
+
+m = demo(data)
+chain = sample(m, alg, n)
+
+# To inspect the `interesting_quantity(θ, x)` where `θ` is replaced by samples from the posterior/`chain`:
+generated_quantities(m, chain)
+```
+"""
+function generated_quantities(m::Turing.Model, c::Turing.MCMCChains.Chains)
+    varinfo = Turing.DynamicPPL.VarInfo(m)
+
+    map(1:length(c)) do i
+        Turing.DynamicPPL._setval!(varinfo, c[i])
+        m(varinfo)
+    end
+end
+
+"Converts a vector of tuples to a tuple of vectors."
+function vectup2tupvec(ts::AbstractVector{<:Tuple})
+    k = length(first(ts))
+    
+    return tuple([[t[i] for t in ts] for i = 1:k]...)
 end
