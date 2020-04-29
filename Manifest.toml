@@ -255,8 +255,8 @@ uuid = "31c24e10-a181-5473-b8eb-7969acd0382f"
 version = "0.23.2"
 
 [[DistributionsAD]]
-deps = ["Combinatorics", "Compat", "DiffRules", "Distributions", "FillArrays", "ForwardDiff", "LinearAlgebra", "MacroTools", "NaNMath", "PDMats", "Random", "Requires", "SpecialFunctions", "StaticArrays", "StatsBase", "StatsFuns", "Tracker", "Zygote", "ZygoteRules"]
-git-tree-sha1 = "40246145bbae39c38f40968f15795b0ba1c92f56"
+deps = ["Combinatorics", "Compat", "DiffRules", "Distributions", "FillArrays", "ForwardDiff", "LinearAlgebra", "MacroTools", "NaNMath", "PDMats", "Random", "Requires", "SpecialFunctions", "StaticArrays", "StatsBase", "StatsFuns", "Tracker", "ZygoteRules"]
+git-tree-sha1 = "791d6ec59061c3a073fc82c93fa6e322a625e14d"
 repo-rev = "mt/neurips"
 repo-url = "https://github.com/TuringLang/DistributionsAD.jl.git"
 uuid = "ced4e74d-a319-5a8a-b0ac-84af2272839c"
@@ -275,9 +275,9 @@ uuid = "634d3b9d-ee7a-5ddf-bec9-22491ea816e1"
 version = "1.10.2"
 
 [[DynamicPPL]]
-deps = ["AbstractMCMC", "Bijectors", "Distributions", "MacroTools", "ZygoteRules"]
-git-tree-sha1 = "0267d956be6f7be2022977d1fbdf764e0adc4c02"
-repo-rev = "mt/neurips2"
+deps = ["AbstractMCMC", "Bijectors", "Distributions", "MacroTools", "Random", "ZygoteRules"]
+git-tree-sha1 = "3d2b670dacab754fde96b11223a3f9d3fd867361"
+repo-rev = "master"
 repo-url = "https://github.com/TuringLang/DynamicPPL.jl.git"
 uuid = "366bfd00-2699-11ea-058f-f148b4cae6d8"
 version = "0.6.0"
@@ -955,7 +955,7 @@ version = "0.3.8"
 
 [[Turing]]
 deps = ["AbstractMCMC", "AdvancedHMC", "AdvancedMH", "Bijectors", "Distributions", "DistributionsAD", "DocStringExtensions", "DynamicPPL", "EllipticalSliceSampling", "ForwardDiff", "Libtask", "LinearAlgebra", "LogDensityProblems", "MCMCChains", "ProgressLogging", "Random", "Reexport", "Requires", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Tracker"]
-git-tree-sha1 = "adb5b5b8c80b923c70a31070bede473450830d3f"
+git-tree-sha1 = "c0db06d46abfd83e5e0f7da61c4805172d1a186c"
 repo-rev = "mt/modelling-temporary"
 repo-url = "https://github.com/TuringLang/Turing.jl.git"
 uuid = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
