@@ -3,6 +3,7 @@ using Turing
 using Distributions, StatsBase
 using ArgCheck
 using FillArrays
+import ReverseDiff, ForwardDiff
 
 using Base.Threads
 
@@ -217,7 +218,7 @@ end
             # cases_pred = sum(daily_cases_pred_m[1:(t - 1)])
             cases_pred_m[t] = cases_pred_m[t - 1] + daily_cases_pred_m[t - 1]
 
-            Rₜ_adj = (max(0, pop_m - cases_pred_m[t]) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
+            Rₜ_adj = (max0(pop_m - cases_pred_m[t]) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
             daily_cases_pred_m[t] = Rₜ_adj * sum([daily_cases_pred_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1)])
         end
 
@@ -333,7 +334,7 @@ end
             # cases_pred = sum(daily_cases_pred_m[1:(t - 1)])
             cases_pred_m[t] = cases_pred_m[t - 1] + daily_cases_pred_m[t - 1]
 
-            Rₜ_adj = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
+            Rₜ_adj = (max0(pop_m - cases_pred_m[t]) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
             daily_cases_pred_m[t] = Rₜ_adj * sum([daily_cases_pred_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1)])
         end
 
@@ -366,6 +367,7 @@ end
     return daily_cases_pred, expected_daily_deaths, Rₜ
 end
 
+ReverseDiff.@forward max0(x::Real) = max(x, zero(x))
 
 @model model_v2_vectorized_multithreaded(
     num_countries,     # [Int] num. of countries
@@ -457,7 +459,7 @@ end
         for t = (num_impute + 1):last_time_step
             cases_pred_m[t] = cases_pred_m[t - 1] + daily_cases_pred_m[t - 1]
 
-            Rₜ_adj = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
+            Rₜ_adj = (max0(pop_m - cases_pred_m[t]) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
             daily_cases_pred_m[t] = Rₜ_adj * sum(daily_cases_pred_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1))
         end
 
