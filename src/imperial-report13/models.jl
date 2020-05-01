@@ -418,6 +418,7 @@ end
     cases_pred = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
     expected_daily_deaths = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
     Rₜ = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+    Rₜ_adj = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
 
     # NOTE: making this threaded shaved off ~1/3 of the runtime
     @threads for m = 1:num_countries
@@ -428,6 +429,7 @@ end
         cases_pred_m = cases_pred[m]
         expected_daily_deaths_m = expected_daily_deaths[m]
         Rₜ_m = Rₜ[m]
+        Rₜ_adj_m = Rₜ_adj[m]
         
         last_time_step = last_time_steps[m]
 
@@ -450,6 +452,9 @@ end
         xs = covariates[m][1:last_time_step, :] # extract covariates for the wanted time-steps
         Rₜ_m .= μ[m] * exp.(xs * (-α) + (- lockdown[m]) * xs[:, lockdown_index])
 
+        # adjusts for portion of pop that are susceptible
+        Rₜ_adj_m[1:num_impute] .= (max.(pop_m .- cases_pred_m[1:num_impute], zero(cases_pred_m[1])) ./ pop_m) .* Rₜ_m[1:num_impute]
+
         ### Stan-equivalent ###        
         # for (i in (N0+1):N2) {
         #   real convolution=0;
@@ -463,8 +468,8 @@ end
         for t = (num_impute + 1):last_time_step
             cases_pred_m[t] = cases_pred_m[t - 1] + daily_cases_pred_m[t - 1]
 
-            Rₜ_adj = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
-            daily_cases_pred_m[t] = Rₜ_adj * sum([daily_cases_pred_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1)])
+            Rₜ_adj_m[t] = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
+            daily_cases_pred_m[t] = Rₜ_adj_m[t] * sum([daily_cases_pred_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1)])
         end
 
         ### Stan-equivalent ###
@@ -493,9 +498,15 @@ end
     @threads for m = 1:num_countries
         expected_daily_deaths_m = expected_daily_deaths[m]
         ts = epidemic_start[m]:num_obs_countries[m]
+        # deaths[m][ts] ~ arraydist(NegativeBinomial2.(expected_daily_deaths_m[ts], ϕ))
         logps[m] = logpdf(arraydist(NegativeBinomial2.(expected_daily_deaths_m[ts], ϕ)), deaths[m][ts])
     end
     _varinfo.logp[] += sum(logps)
 
-    return daily_cases_pred, expected_daily_deaths, Rₜ
+    return (
+        daily_cases_pred = daily_cases_pred,
+        expected_daily_deaths = expected_daily_deaths,
+        Rₜ = Rₜ,
+        Rₜ_adjusted = Rₜ_adj
+    )
 end

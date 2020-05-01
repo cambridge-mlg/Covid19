@@ -79,7 +79,7 @@ generated_quantities(m, chain)
 function generated_quantities(m::Turing.Model, c::Turing.MCMCChains.Chains)
     varinfo = Turing.DynamicPPL.VarInfo(m)
 
-    map(1:length(c)) do i
+    return map(1:length(c)) do i
         Turing.DynamicPPL._setval!(varinfo, c[i])
         m(varinfo)
     end
@@ -90,4 +90,11 @@ function vectup2tupvec(ts::AbstractVector{<:Tuple})
     k = length(first(ts))
     
     return tuple([[t[i] for t in ts] for i = 1:k]...)
+end
+
+"Converts a vector of named tuples to a tuple of vectors."
+function vectup2tupvec(ts::AbstractVector{<:NamedTuple})
+    ks = keys(first(ts))
+
+    return (; (k => [t[k] for t in ts] for k ∈ ks)...)
 end
