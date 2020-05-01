@@ -132,9 +132,7 @@ data.num_countries
 uk_index = findfirst(==("United_Kingdom"), countries)
 
 @model model_v2(
-    num_countries,     # [Int] num. of countries
     num_impute,        # [Int] num. of days for which to impute infections
-    num_obs_countries, # [Vector{Int}] days of observed data for country `m`; each entry must be ≤ N2
     num_total_days,    # [Int] days of observed data + num. of days to forecast
     cases,             # [AbstractVector{<:AbstractVector{<:Int}}] reported cases
     deaths,            # [AbstractVector{<:AbstractVector{<:Int}}] reported deaths; rows indexed by i > N contain -1 and should be ignored
@@ -149,6 +147,11 @@ uk_index = findfirst(==("United_Kingdom"), countries)
 ) where {TV} = begin
     # `covariates` should be of length `num_countries` and each entry correspond to a matrix of size `(num_total_days, num_covariates)`
     num_covariates = size(covariates[1], 2)
+    num_countries = length(cases)
+    num_obs_countries = Vector(undef, num_countries)
+    for m = 1:num_countries
+        num_obs_countries[m] = length(cases[m])
+    end
 
     # Latent variables
     τ ~ Exponential(1 / 0.03) # `Exponential` has inverse parameterization of the one in Stan
@@ -238,13 +241,11 @@ uk_index = findfirst(==("United_Kingdom"), countries)
     )
 end;
 
-model_def = model_v2
+model_def = model_v2;
 
 # Model instantance used to for inference
 m_no_pred = model_def(
-    data.num_countries,
     data.num_impute,
-    data.num_obs_countries,
     data.num_total_days,
     data.cases,
     data.deaths,
@@ -259,9 +260,7 @@ m_no_pred = model_def(
 
 # Model instance used for prediction
 m = model_def(
-    data.num_countries,
     data.num_impute,
-    data.num_obs_countries,
     data.num_total_days,
     data.cases,
     data.deaths,
@@ -294,22 +293,23 @@ function country_prediction_plot(country_idx, predictions_country::AbstractMatri
     # A tiny bit of preprocessing of the data
     preproc(x) = normalize_pop ? x ./ pop : x
 
-    daily_deaths = preproc(replace(data.deaths[country_idx][1:num_observed_days], missing => 0.))
-    daily_cases = preproc(replace(data.cases[country_idx][1:num_observed_days], missing => 0.))
+    daily_deaths = data.deaths[country_idx][1:num_observed_days]
+    daily_cases = data.cases[country_idx][1:num_observed_days]
     
-    p1 = bar(daily_deaths, label="$(country_name)", xaxis=false)
+    p1 = plot(; xaxis = false, legend = :topleft)
+    bar!(preproc(daily_deaths), label="$(country_name)")
     title!("Observed daily deaths")
     vline!([data.epidemic_start[country_idx]], label="epidemic start", linewidth=2)
     vline!([data.num_obs_countries[country_idx]], label="end of observations", linewidth=2)
     xlims!(0, num_total_days)
 
     p2 = plot(; legend = :topleft, xaxis=false)
-    plot_confidence_timeseries!(p2, preproc(e_deaths_country); label = "$(countries[country_idx])")
+    plot_confidence_timeseries!(p2, preproc(e_deaths_country); label = "$(country_name)")
     title!("Expected daily deaths (pred)")
-    bar!(daily_deaths, label="$(countries[country_idx]) (observed)", alpha=0.5)
+    bar!(preproc(daily_deaths), label="$(country_name) (observed)", alpha=0.5)
 
-    p3 = plot(; xaxis=false)
-    plot_confidence_timeseries!(p3, Rₜ_country; label = "$(countries[country_idx])")
+    p3 = plot(; legend = :bottomleft, xaxis=false)
+    plot_confidence_timeseries!(p3, Rₜ_country; no_label = true)
     for (c_idx, c_time) in enumerate(findfirst.(==(1), eachcol(data.covariates[country_idx])))
         if c_time !== nothing
             # c_name = names(covariates)[2:end][c_idx]
@@ -325,24 +325,24 @@ function country_prediction_plot(country_idx, predictions_country::AbstractMatri
     lq, hq = (eachrow(hcat(qs...))..., )
     ylims!(0, maximum(hq) + 0.1)
 
-    # p3 = bar(replace(data.cases[country_idx], missing => -1.), label="$(countries[country_idx])")
+    # p3 = bar(replace(data.cases[country_idx], missing => -1.), label="$(country_name)")
     # title!("Daily cases")
 
     p4 = plot(; legend = :topleft, xaxis=false)
-    plot_confidence_timeseries!(p4, preproc(predictions_country); label = "$(countries[country_idx])")
+    plot_confidence_timeseries!(p4, preproc(predictions_country); label = "$(country_name)")
     title!("Expected daily cases (pred)")
-    bar!(daily_cases, label="$(countries[country_idx]) (observed)", alpha=0.5)
+    bar!(preproc(daily_cases), label="$(country_name) (observed)", alpha=0.5)
 
-    vals = cumsum(e_deaths_country; dims = 1)
+    vals = preproc(cumsum(e_deaths_country; dims = 1))
     p5 = plot(; legend = :topleft, xaxis=false)
-    plot_confidence_timeseries!(p5, preproc(vals); label = "$(countries[country_idx])")
-    plot!(cumsum(daily_deaths), label="observed", color=:red)
+    plot_confidence_timeseries!(p5, vals; label = "$(country_name)")
+    plot!(preproc(cumsum(daily_deaths)), label="observed", color=:red)
     title!("Expected deaths (pred)")
 
-    vals = cumsum(predictions_country; dims = 1)
+    vals = preproc(cumsum(predictions_country; dims = 1))
     p6 = plot(; legend = :topleft)
-    plot_confidence_timeseries!(p6, preproc(vals); label = "$(countries[country_idx])")
-    plot!(daily_cases, label="observed", color=:red)
+    plot_confidence_timeseries!(p6, vals; label = "$(country_name)")
+    plot!(preproc(daily_cases), label="observed", color=:red)
     title!("Expected cases (pred)")
 
     p = plot(p1, p3, p2, p4, p5, p6, layout=(6, 1), size=(900, 1200), sharex=true)
@@ -445,9 +445,7 @@ end
 
 # What happens if we don't do anything?
 m_counterfactual = model_def(
-    data.num_countries,
     data.num_impute,
-    data.num_obs_countries,
     data.num_total_days,
     data.cases,
     data.deaths,
@@ -463,13 +461,11 @@ m_counterfactual = model_def(
 # Compute the "generated quantities" for the "counter-factual" model
 generated_counterfactual = vectup2tupvec(generated_quantities(m_counterfactual, pooled_chains));
 daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_counterfactual, Rₜ_adj_counterfactual = generated_counterfactual;
-country_prediction_plot(5, daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_adj_counterfactual)
+country_prediction_plot(5, daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_adj_counterfactual; normalize_pop = true)
 
 # What happens if we never close schools nor do a lockdown?
 m_counterfactual = model_def(
-    data.num_countries,
     data.num_impute,
-    data.num_obs_countries,
     data.num_total_days,
     data.cases,
     data.deaths,
@@ -485,9 +481,9 @@ m_counterfactual = model_def(
 # Compute the "generated quantities" for the "counter-factual" model
 generated_counterfactual = vectup2tupvec(generated_quantities(m_counterfactual, pooled_chains));
 daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_counterfactual, Rₜ_adj_counterfactual = generated_counterfactual;
-country_prediction_plot(uk_index, daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_adj_counterfactual)
+country_prediction_plot(uk_index, daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_adj_counterfactual; normalize_pop = true)
 
-lift_lockdown_time = 70
+lift_lockdown_time = 75
 
 new_covariates = [copy(c) for c in data.covariates] # <= going to do inplace manipulations so we copy
 for covariates_m ∈ new_covariates
@@ -496,9 +492,7 @@ end
 
 # What happens if we never close schools nor do a lockdown?
 m_counterfactual = model_def(
-    data.num_countries,
     data.num_impute,
-    data.num_obs_countries,
     data.num_total_days,
     data.cases,
     data.deaths,
@@ -514,4 +508,4 @@ m_counterfactual = model_def(
 # Compute the "generated quantities" for the "counter-factual" model
 generated_counterfactual = vectup2tupvec(generated_quantities(m_counterfactual, pooled_chains));
 daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_counterfactual, Rₜ_adj_counterfactual = generated_counterfactual;
-country_prediction_plot(uk_index, daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_adj_counterfactual)
+country_prediction_plot(uk_index, daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_adj_counterfactual; normalize_pop = true)
