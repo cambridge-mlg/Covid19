@@ -1,4 +1,5 @@
 #+SETUPFILE: ~/org-blog/setup.org
+#+OPTIONS: toc:t num:t tex:dvipng
 
 #+PROPERTY: header-args: :eval never-export
 #+PROPERTY: header-args:julia :eval never-export :exports both :kernel julia-4-threads-1.4 :session /ssh:grothendieck:/homes/tef30/.local/share/jupyter/runtime/kernel-3f2d796a-6f9b-4194-abf9-00f9ae2d9247.json :tangle ../scripts/03-visualization.jl
@@ -6,6 +7,8 @@
 #+HTML_HEAD: <link rel="stylesheet" type="text/css" href="/home/tor/org-blog/assets/css/main.css"/>
 #+HTML_HEAD: <style>body { width: 60%; margin: 0 auto; } div.figure > p > img { max-height: 700px; }  </style>
 #+HTML_HEAD: <style>div.two-by-two { height: 100%;display: flex;flex-direction: row;flex-wrap: wrap; } div.two-by-two > div.figure { width: 45%; margin: 0 auto; } </style>
+
+#+AUTHOR: Tor Erlend Fjelde
 
 #+TITLE: Replication study: Estimating number of inections and impact of NPIs on COVID-19 in European countries (Imperial Report 13)
 
@@ -28,10 +31,13 @@ cd("$(_home)/Projects/mine/Covid19/")
 pwd()
 #+end_src
 
-* Introduction
+#+RESULTS:
+: "/homes/tef30/Projects/mine/Covid19"
+
+
 We, i.e. the [[https://turing.ml/dev/team/][TuringLang team]], are currently exploring cooperation with other researchers in attempt to help with the ongoing crisis. As preparation for this and to get our feet wet, we decided it would be useful to do a replication study of the [[https://www.imperial.ac.uk/mrc-global-infectious-disease-analysis/covid-19/report-13-europe-npi-impact/][Imperial Report 13]]. We figured it might be useful for the public, in particular other researchers working on the same or similar models, to see the results of this analysis, and thus decided to make it available here.
 
-We want to emphasize that you should look to the original paper rather than this post for developments and analysis of the model. As of right now, we're not going to be making any claims about the validity of the model nor about what the results imply. This post's purpose is only to add tiny bit of validation to the /inference/ performed in the paper by obtaining the same results using a different probabilistic programming language (PPL) and to explore whether or not =Turing.jl= can be useful for researchers working on these problems.
+We want to emphasize that you should look to the original paper rather than this post for developments and analysis of the model. As of right now, we're not going to be making any claims about the validity of the model nor the implications of the results. This post's purpose is only to add tiny bit of validation to the /inference/ performed in the paper by obtaining the same results using a different probabilistic programming language (PPL) and to explore whether or not =Turing.jl= can be useful for researchers working on these problems.
 
 The full code for the =Covid19.jl= package you can find [[https://github.com/TuringLang/Covid19][here]].
 
@@ -50,6 +56,8 @@ using Pkg
 Pkg.instantiate()
 #+end_src
 
+#+RESULTS:
+
 With the project activate, we can import the =Covid19.jl= package:
 
 #+begin_src julia
@@ -57,10 +65,14 @@ With the project activate, we can import the =Covid19.jl= package:
 using Covid19
 #+end_src
 
+#+RESULTS:
+
 #+begin_src julia
 # Some other packages we'll need
 using Random, Dates, Turing, Bijectors
 #+end_src
+
+#+RESULTS:
 
 And we'll be using the new [[https://julialang.org/blog/2019/07/multithreading/][multithreading functionality in Julia]] to speed things up, so we need the =Base.Threads= package.
 
@@ -68,6 +80,9 @@ And we'll be using the new [[https://julialang.org/blog/2019/07/multithreading/]
 using Base.Threads
 nthreads()
 #+end_src
+
+#+RESULTS:
+: 4
 
 #+begin_src julia :exports none
 begin
@@ -80,11 +95,15 @@ begin
 end
 #+end_src
 
+#+RESULTS:
+
 #+begin_src julia :exports none
 begin
     @assert length(unique(rand(Turing.filldist(Gamma(.1667, 1), 6)))) > 1
 end
 #+end_src
+
+#+RESULTS:
 
 Here's a summary of the setup:
 
@@ -92,6 +111,33 @@ Here's a summary of the setup:
 using Pkg
 Pkg.status()
 #+end_src
+
+#+RESULTS:
+#+BEGIN_EXAMPLE
+[36m[1mProject [22m[39mCovid19 v0.1.0
+[32m[1mStatus[22m[39m `~/Projects/mine/Covid19/Project.toml`
+ [90m [dce04be8][39m[37m ArgCheck v2.0.0[39m
+ [90m [c7e460c6][39m[37m ArgParse v1.1.0[39m
+ [90m [131c737c][39m[37m ArviZ v0.4.1[39m
+ [90m [76274a88][39m[37m Bijectors v0.6.7 #tor/using-bijectors-in-link-and-invlink (https://github.com/TuringLang/Bijectors.jl.git)[39m
+ [90m [336ed68f][39m[37m CSV v0.6.1[39m
+ [90m [a93c6f00][39m[37m DataFrames v0.20.2[39m
+ [90m [31c24e10][39m[37m Distributions v0.23.2[39m
+ [90m [ced4e74d][39m[37m DistributionsAD v0.4.10[39m
+ [90m [634d3b9d][39m[37m DrWatson v1.10.2[39m
+ [90m [1a297f60][39m[37m FillArrays v0.8.7[39m
+ [90m [47be7bcc][39m[37m ORCA v0.3.1[39m
+ [90m [f0f68f2c][39m[37m PlotlyJS v0.13.1[39m
+ [90m [91a5bcdd][39m[37m Plots v1.1.2[39m
+ [90m [438e738f][39m[37m PyCall v1.91.4[39m
+ [90m [d330b81b][39m[37m PyPlot v2.9.0[39m
+ [90m [df47a6cb][39m[37m RData v0.7.1[39m
+ [90m [2913bbd2][39m[37m StatsBase v0.33.0[39m
+ [90m [f3b207a7][39m[37m StatsPlots v0.14.5[39m
+ [90m [fce5fe82][39m[37m Turing v0.11.0 #tor/modelling-temporary (https://github.com/TuringLang/Turing.jl.git)[39m
+ [90m [9a3f8284][39m[37m Random [39m
+ [90m [10745b16][39m[37m Statistics [39m
+#+END_EXAMPLE
 In the Github project you will find a =Manifest.toml=. This means that if you're working directory is the project directory, and you do =julia --project= followed by =] instantiate= you will have /exactly/ the same enviroment as we had when performing this analysis.
 
 * Data
@@ -104,24 +150,87 @@ datadir() = projectdir("data", "imperial-report13")
 datadir(s...) = projectdir("data", "imperial-report13", s...)
 #+end_src
 
+#+RESULTS:
+: datadir (generic function with 2 methods)
+
 To ensure consistency with the original model from the paper (and to stay up-to-date with the changes made), we preprocessed the data using the =base.r= script from the [[https://github.com/ImperialCollegeLondon/covid19model/tree/6ee3010a58a57cc14a16545ae897ca668b7c9096][original repository (#6ee3010)]] and store the processed data in a =processed.rds= file. To load this RDS file obtained from the R script, we make use of the RData.jl package which allows us to load the RDS file into a Julia =Dict=.
 
 #+begin_src julia
 using RData
 #+end_src
 
+#+RESULTS:
+
 #+begin_src julia :exports code
 rdata_full = load(datadir("processed_new.rds"))
 rdata = rdata_full["stan_data"];
 #+end_src
 
+#+RESULTS:
+#+BEGIN_EXAMPLE
+┌ Warning: 13 element in a 2 list, assuming it's the last element
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/readers.jl:138
+┌ Warning: 13 element in a 2 list, assuming it's the last element
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/readers.jl:138
+┌ Warning: 13 element in a 2 list, assuming it's the last element
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/readers.jl:138
+┌ Warning: 13 element in a 2 list, assuming it's the last element
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/readers.jl:138
+┌ Warning: 13 element in a 2 list, assuming it's the last element
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/readers.jl:138
+┌ Warning: 13 element in a 2 list, assuming it's the last element
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/readers.jl:138
+┌ Warning: 13 element in a 2 list, assuming it's the last element
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/readers.jl:138
+┌ Warning: 13 element in a 2 list, assuming it's the last element
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/readers.jl:138
+┌ Warning: 13 element in a 2 list, assuming it's the last element
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/readers.jl:138
+┌ Warning: 13 element in a 2 list, assuming it's the last element
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/readers.jl:138
+┌ Warning: 13 element in a 2 list, assuming it's the last element
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/readers.jl:138
+┌ Warning: 13 element in a 2 list, assuming it's the last element
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/readers.jl:138
+┌ Warning: Conversion of RData.RDummy{0xfe} to Julia is not implemented
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/convert.jl:142
+┌ Warning: Unsupported AltRep SEXP
+└ @ RData /homes/tef30/.julia/packages/RData/7cjT6/src/convert.jl:205
+#+END_EXAMPLE
+
 #+begin_src julia
 keys(rdata_full)
 #+end_src
 
+#+RESULTS:
+: Base.KeySet for a Dict{String,Int64} with 4 entries. Keys:
+:   "reported_cases"
+:   "stan_data"
+:   "deaths_by_country"
+:   "dates"
+
 #+begin_src julia
 country_to_dates = d = Dict([(k, rdata_full["dates"][k]) for k in keys(rdata_full["dates"])])
 #+end_src
+
+#+RESULTS:
+#+BEGIN_EXAMPLE
+Dict{String,Array{Date,1}} with 14 entries:
+  "Sweden"         => Date[2020-02-18, 2020-02-19, 2020-02-20, 2020-02-21, 2020…
+  "Belgium"        => Date[2020-02-18, 2020-02-19, 2020-02-20, 2020-02-21, 2020…
+  "Greece"         => Date[2020-02-19, 2020-02-20, 2020-02-21, 2020-02-22, 2020…
+  "Switzerland"    => Date[2020-02-14, 2020-02-15, 2020-02-16, 2020-02-17, 2020…
+  "Germany"        => Date[2020-02-15, 2020-02-16, 2020-02-17, 2020-02-18, 2020…
+  "United_Kingdom" => Date[2020-02-12, 2020-02-13, 2020-02-14, 2020-02-15, 2020…
+  "Denmark"        => Date[2020-02-21, 2020-02-22, 2020-02-23, 2020-02-24, 2020…
+  "Norway"         => Date[2020-02-24, 2020-02-25, 2020-02-26, 2020-02-27, 2020…
+  "France"         => Date[2020-02-07, 2020-02-08, 2020-02-09, 2020-02-10, 2020…
+  "Portugal"       => Date[2020-02-21, 2020-02-22, 2020-02-23, 2020-02-24, 2020…
+  "Spain"          => Date[2020-02-09, 2020-02-10, 2020-02-11, 2020-02-12, 2020…
+  "Netherlands"    => Date[2020-02-14, 2020-02-15, 2020-02-16, 2020-02-17, 2020…
+  "Italy"          => Date[2020-01-27, 2020-01-28, 2020-01-29, 2020-01-30, 2020…
+  "Austria"        => Date[2020-02-22, 2020-02-23, 2020-02-24, 2020-02-25, 2020…
+#+END_EXAMPLE
 
 Since the data-format is not native Julia there might be some discrepancies in the /types/ of the some data fields, and so we need to do some type-conversion of the loaded =rdata=. We also rename a lot of the fields to make it more understandable and for an easier mapping to our implementation of the model. Feel free to skip this snippet.
 
@@ -220,17 +329,25 @@ data = merge(
 );
 #+end_src
 
+#+RESULTS:
+
 #+HTML: </details>
 
 #+begin_src julia
 data.num_countries
 #+end_src
 
+#+RESULTS:
+: 14
+
 Because it's a bit much to visualize 14 countries at each step, we're going to use UK as an example throughout.
 
 #+begin_src julia
 uk_index = findfirst(==("United_Kingdom"), countries)
 #+end_src
+
+#+RESULTS:
+: 5
 
 * Model
 For a thorough description of the model and the assumptions that have gone into it, we recommend looking at the [[https://www.imperial.ac.uk/mrc-global-infectious-disease-analysis/covid-19/report-13-europe-npi-impact/][original paper]] or their very nice [[https://github.com/ImperialCollegeLondon/covid19model/tree/6ee3010a58a57cc14a16545ae897ca668b7c9096/Technical_description_of_Imperial_COVID_19_Model.pdf][techical report from the repository]]. The model described here is the one corresponding to the technical report linked. The link points to the correct commit ID and so should be consistent with this post despite potential changes to the "official" model made in the future.
@@ -254,16 +371,17 @@ For the sake of exposition, we present a compact version of the model here:
   D_{t, m} &\sim \mathrm{NegativeBinomial}(d_{t, m}, \phi) \quad & \text{for} \quad m = 1, \dots, M, \ t = 1, \dots, T 
 \end{align}
 where
+- $\alpha_k$ denotes the weights for the k-th intervention/covariate
 - $\beta_m$ denotes the weight for the =lockdown= intervention (whose index we denote by $k_{\text{ld}}$)
   - Note that there is also a $\alpha_{k_{\text{ld}}}$ which is shared between all the $M$ countries
   - In contrast, the $\beta_m$ weight is local to the country with index $m$
   - This is a sort of  way to try and deal with the fact that =lockdown= means different things in different countries, e.g. =lockdown= in UK is much more severe than "lockdown" in Norway.
 - $\mu_m$ represents the $R_0$ value for country $m$ (i.e. $R_t$ without any interventions)
-- $\mathrm{ifr}_m$ denotes the /infection-fatality ratio/ for country $m$, and $\mathrm{ifr}_m^{ * }$ the /adjusted/ infection-fatality ratio (see paper)
+- $R_{t, m}$ denotes the *reproduction number* at time $t$ for country $m$
+- $p_{m}$ denotes the *total/initial population* for country $m$
+- $\mathrm{ifr}_m$ denotes the *infection-fatality ratio* for country $m$, and $\mathrm{ifr}_m^{ * }$ the /adjusted/ infection-fatality ratio (see paper)
 - $\varepsilon_m^{\text{ifr}}$ denotes the noise for the multiplicative noise for the $\mathrm{ifr}_m^{ * }$
-- $R_{t, m}$ denotes the /R-value/ at time $t$ for country $m$
-- $p_{m}$ denotes the total/initial population for country $m$
-- $\pi$ denotes the /time from infection to death/ and is assumed to be a sum of two independent random times: the incubation period (/infection-to-onset/) and time between onset of symptoms and death (/onset-to-death/):
+- $\pi$ denotes the *time from infection to death* and is assumed to be a sum of two independent random times: the incubation period (/infection-to-onset/) and time between onset of symptoms and death (/onset-to-death/):
   \begin{equation*}
   \pi \sim \mathrm{Gamma}(5.1, 0.86) + \mathrm{Gamma}(18.8, 0.45)
   \end{equation*}
@@ -273,10 +391,10 @@ where
   d_m(t) = \mathrm{ifr}_m^{ * } \int_0^t c_m(\tau) \pi(t - \tau) \dd{t}
   \end{equation*}
   i.e. the convolution of the number of cases observed at time time $\tau$, $c_m(\tau)$, and the /probability/ of death at prior to time $t$ for the new cases observed at time $\tau$, $\pi(t - \tau)$ (assuming stationarity of $\pi(t)$). Thus, $c_m(\tau) \pi(t - \tau)$ can be interpreted as the portion people who got the virus at time $\tau$ have died at time $t$ (or rather, have died after having the virus for $t - \tau$ time, with $t > \tau$). Discretizing then results in the above model.
-- $s_t$ denotes the /serial intervals/, i.e. the time between successive cases in a chain of transmission
-- $c_{t, m}$ denotes the /expected daily cases/ at time $t$ for country $m$
-- $d_{t, m}$ denotes the /expected daily deaths/ at time $t$ for country $m$
-- $D_{t, m}$ denotes the /daily deaths/ at time $t$ for country $m$ (in our case, this is the *likelihood*)
+- $s_t$ denotes the *serial intervals*, i.e. the time between successive cases in a chain of transmission, also a precomputed quantity
+- $c_{t, m}$ denotes the *expected daily cases* at time $t$ for country $m$
+- $d_{t, m}$ denotes the *expected daily deaths* at time $t$ for country $m$
+- $D_{t, m}$ denotes the *daily deaths* at time $t$ for country $m$ (in our case, this is the *likelihood*)
 
 To see the reasoning for the choices of distributions and parameters for the priors, see the either the paper or the [[https://github.com/ImperialCollegeLondon/covid19model/tree/6ee3010a58a57cc14a16545ae897ca668b7c9096/Technical_description_of_Imperial_COVID_19_Model.pdf][techical report from the repository]].
 
@@ -295,7 +413,7 @@ last_time_steps = predict ? fill(num_total_days, num_countries) : num_obs_countr
 #+name: jl:country-computation
 #+begin_src julia :exports none :eval no :tangle no
 function country_computation!(
-    expected_daily_cases_m, expected_daily_deaths_m, cases_pred_m, Rₜ_m, Rₜ_adj_m,
+    expected_daily_cases_m, expected_daily_deaths_m, cases_pred_m, Rt_m, Rt_adj_m,
     pop_m, π_m, last_time_step, covariates_m, ifr_noise_m, μ_m, y_m, α, lockdown_m, lockdown_index, serial_intervals, num_impute
 )
     # Imputation of `num_impute` days
@@ -303,16 +421,16 @@ function country_computation!(
     cases_pred_m[1:num_impute] .= cumsum(expected_daily_cases_m[1:num_impute])
     
     xs = covariates_m[1:last_time_step, :] # extract covariates for the wanted time-steps and country `m`
-    Rₜ_m .= μ_m * exp.(xs * (-α) + (- lockdown_m) * xs[:, lockdown_index])
+    Rt_m .= μ_m * exp.(xs * (-α) + (- lockdown_m) * xs[:, lockdown_index])
 
     # adjusts for portion of pop that are susceptible
-    Rₜ_adj_m[1:num_impute] .= (max.(pop_m .- cases_pred_m[1:num_impute], zero(cases_pred_m[1])) ./ pop_m) .* Rₜ_m[1:num_impute]
+    Rt_adj_m[1:num_impute] .= (max.(pop_m .- cases_pred_m[1:num_impute], zero(cases_pred_m[1])) ./ pop_m) .* Rt_m[1:num_impute]
 
     for t = (num_impute + 1):last_time_step
         cases_pred_m[t] = cases_pred_m[t - 1] + expected_daily_cases_m[t - 1]
 
-        Rₜ_adj_m[t] = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
-        expected_daily_cases_m[t] = Rₜ_adj_m[t] * sum(expected_daily_cases_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1))
+        Rt_adj_m[t] = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rt_m[t] # adjusts for portion of pop that are susceptible
+        expected_daily_cases_m[t] = Rt_adj_m[t] * sum(expected_daily_cases_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1))
     end
 
     expected_daily_deaths_m[1] = 1e-15 * expected_daily_cases_m[1]
@@ -330,15 +448,15 @@ end
 expected_daily_cases = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
 cases_pred = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
 expected_daily_deaths = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-Rₜ = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-Rₜ_adj = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+Rt = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+Rt_adj = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
 
 # Loops over countries and perform independent computations for each country
 # since this model does not include any notion of migration across borders.
 # => might has well wrap it in a `@threads` to perform the computation in parallel.
 @threads for m = 1:num_countries
     country_computation!(
-        expected_daily_cases[m], expected_daily_deaths[m], cases_pred[m], Rₜ[m], Rₜ_adj[m], # <= mutated
+        expected_daily_cases[m], expected_daily_deaths[m], cases_pred[m], Rt[m], Rt_adj[m], # <= mutated
         population[m], π[m], last_time_steps[m], covariates[m], ifr_noise[m], μ[m], y[m], α, lockdown[m], lockdown_index, serial_intervals, num_impute
     )
 end
@@ -350,44 +468,45 @@ end
 expected_daily_cases = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
 cases_pred = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
 expected_daily_deaths = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-Rₜ = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-Rₜ_adj = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+Rt = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+Rt_adj = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
 
 # Loops over countries and perform independent computations for each country
 # since this model does not include any notion of migration across borders.
 # => might has well wrap it in a `@threads` to perform the computation in parallel.
 @threads for m = 1:num_countries
     # country-specific parameters
-    πₘ = π[m]
+    π_m = π[m]
     pop_m = population[m]
     expected_daily_cases_m = expected_daily_cases[m]
     cases_pred_m = cases_pred[m]
     expected_daily_deaths_m = expected_daily_deaths[m]
-    Rₜ_m = Rₜ[m]
-    Rₜ_adj_m = Rₜ_adj[m]
+    Rt_m = Rt[m]
+    Rt_adj_m = Rt_adj[m]
     
     last_time_step = last_time_steps[m]
 
     # Imputation of `num_impute` days
     expected_daily_cases_m[1:num_impute] .= y[m]
-    cases_pred_m[1:num_impute] .= cumsum(expected_daily_cases_m[1:num_impute])
+    cases_pred_m[1] = zero(cases_pred_m[1])
+    cases_pred_m[2:num_impute] .= cumsum(expected_daily_cases_m[1:num_impute - 1])
     
     xs = covariates[m][1:last_time_step, :] # extract covariates for the wanted time-steps and country `m`
-    Rₜ_m .= μ[m] * exp.(xs * (-α) + (- lockdown[m]) * xs[:, lockdown_index])
+    Rt_m .= μ[m] * exp.(xs * (-α) + (- lockdown[m]) * xs[:, lockdown_index])
 
     # adjusts for portion of pop that are susceptible
-    Rₜ_adj_m[1:num_impute] .= (max.(pop_m .- cases_pred_m[1:num_impute], zero(cases_pred_m[1])) ./ pop_m) .* Rₜ_m[1:num_impute]
+    Rt_adj_m[1:num_impute] .= (max.(pop_m .- cases_pred_m[1:num_impute], zero(cases_pred_m[1])) ./ pop_m) .* Rt_m[1:num_impute]
 
     for t = (num_impute + 1):last_time_step
         cases_pred_m[t] = cases_pred_m[t - 1] + expected_daily_cases_m[t - 1]
 
-        Rₜ_adj_m[t] = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
-        expected_daily_cases_m[t] = Rₜ_adj_m[t] * sum(expected_daily_cases_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1))
+        Rt_adj_m[t] = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rt_m[t] # adjusts for portion of pop that are susceptible
+        expected_daily_cases_m[t] = Rt_adj_m[t] * sum(expected_daily_cases_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1))
     end
 
     expected_daily_deaths_m[1] = 1e-15 * expected_daily_cases_m[1]
     for t = 2:last_time_step
-        expected_daily_deaths_m[t] = sum(expected_daily_cases_m[τ] * πₘ[t - τ] * ifr_noise[m] for τ = 1:(t - 1))
+        expected_daily_deaths_m[t] = sum(expected_daily_cases_m[τ] * π_m[t - τ] * ifr_noise[m] for τ = 1:(t - 1))
     end
 end
 #+end_src
@@ -397,8 +516,8 @@ end
 return (
     expected_daily_cases = expected_daily_cases,
     expected_daily_deaths = expected_daily_deaths,
-    Rₜ = Rₜ,
-    Rₜ_adjusted = Rₜ_adj
+    Rt = Rt,
+    Rt_adjusted = Rt_adj
 )
 #+end_src
 
@@ -455,6 +574,8 @@ And the full model is defined:
 end;
 #+end_src
 
+#+RESULTS:
+
 Two things worth noting is the use of this =TV= variable to instantiate some internal variables and the use of =@threads=. 
 
 As you can see in the arguments for the model, =TV= refers to a /type/ and will be recognized as such by the =@model= macro when transforming the model code. This is used to ensure /type-stability/ of the model.
@@ -469,10 +590,11 @@ The use of =@threads= means that inside each execution of the =Model=, this loop
 
 This model is basically identitical to the one defined in [[https://github.com/ImperialCollegeLondon/covid19model/blob/6ee3010a58a57cc14a16545ae897ca668b7c9096/stan-models/base.stan][stan-models/base.stan (#6ee3010)]] with the exception of two points:
 - in this model we use =TruncatedNormal= for normally distributed variables which are positively constrained
-- we've added the use of =max(pop_m - cases_pred_m[t], 0)= in computing the /adjusted/ Rₜ, =Rₜ_adj=, to ensure that in the case where the entire populations has died there, the adjusted Rₜ is set to 0, i.e. if everyone in the country passed away then there is no spread (this does not affect "correctness" of inference) [fn:3]
+- we've added the use of =max(pop_m - cases_pred_m[t], 0)= in computing the /adjusted/ $R_t$, =Rt_adj=, to ensure that in the case where the entire populations has died there, the adjusted $R_t$ is set to 0, i.e. if everyone in the country passed away then there is no spread (this does not affect "correctness" of inference) [fn:3]
+- the =cases= and =deaths= arguments are arrays of arrays instead of 3D arrays, therefore we don't need to fill the future days with =-1= as is done in the original model
 
 *** Multithreaded observe
-We can also make the =observe= statements parallel, but because the =~= is not (yet) threadsafe we unfortunately have to touch some of the internals of =Turing.jl=. But for observations it's very straight-forward. Instead of observing by the following piece of code
+We can also make the =observe= statements parallel, but because the =~= is not (yet) threadsafe we unfortunately have to touch some of the internals of =Turing.jl=. But for observations it's very straight-forward: instead of observing by the following piece of code
 
 #+name: jl:observe
 #+begin_src julia :eval no :tangle no
@@ -549,6 +671,10 @@ This results in the following model definition
 end;
 #+end_src
 
+#+RESULTS:
+: ┌ Warning: you are using the internal variable `_varinfo`
+: └ @ DynamicPPL /homes/tef30/.julia/packages/DynamicPPL/3jy49/src/compiler.jl:175
+
 
 #+begin_src julia :noweb yes :eval no :exports none :tangle no
 <<jl:country-computation>>
@@ -587,8 +713,10 @@ We define an alias =model_def= so that if we want to try out a different model, 
 model_def = model_v2;
 #+end_src
 
+#+RESULTS:
 
-The input data have up to 30-40 days of unobserved /future/ data which we might want to predict on. During sampling we don't need to predict for future dates since we do not have any observations for these cases yet. Therefore we have an argument =predict::Bool= in the model definition which allows us to specify whether or not to generate future quantities.
+
+The input data have up to 30-40 days of unobserved future data which we might want to predict on. But during sampling we don't want to waste computation on sampling for the future for which we do not have any observations. Therefore we have an argument =predict::Bool= in the model which allows us to specify whether or not to generate future quantities.
 
 #+begin_src julia
 # Model instantance used to for inference
@@ -607,6 +735,8 @@ m_no_pred = model_def(
 );
 #+end_src
 
+#+RESULTS:
+
 #+begin_src julia
 # Model instance used for prediction
 m = model_def(
@@ -624,12 +754,45 @@ m = model_def(
 );
 #+end_src
 
+#+RESULTS:
+
 Just to make sure everything is working, we can "evaluate" the model to obtain a sample from the prior:
 
 #+begin_src julia
 res = m();
 res.expected_daily_cases[uk_index]
 #+end_src
+
+#+RESULTS:
+#+BEGIN_EXAMPLE
+100-element Array{Float64,1}:
+    166.5611423862265
+    166.5611423862265
+    166.5611423862265
+    166.5611423862265
+    166.5611423862265
+    166.5611423862265
+    309.141902695016
+    374.0433560255902
+    458.3253551103017
+    567.9400022100784
+    706.8887433414757
+    880.8324318305234
+   1097.7226599235064
+      ⋮
+ 860793.7037040329
+ 860371.4970219615
+ 857377.5507668774
+ 851840.3636037583
+ 843819.1795993944
+ 833402.6417041641
+ 820706.6951623543
+ 805871.8261698874
+ 789059.7490498921
+ 770449.6760629454
+ 750234.3165334907
+ 728615.7558031189
+#+END_EXAMPLE
 
 * Visualization utilities
 For visualisation we of course use [[https://github.com/JuliaPlots/Plots.jl][Plots.jl]], and in this case we're going to use the =pyplot= backend which uses Python's matplotlib under the hood.
@@ -639,11 +802,14 @@ using Plots, StatsPlots
 pyplot()
 #+end_src
 
+#+RESULTS:
+: Plots.PyPlotBackend()
+
 #+HTML: <details><summary>Method definition for plotting the predictive distribution</summary>
 
 #+begin_src julia
 # Ehh, this can be made nicer...
-function country_prediction_plot(country_idx, predictions_country::AbstractMatrix, e_deaths_country::AbstractMatrix, Rₜ_country::AbstractMatrix; normalize_pop::Bool = false)
+function country_prediction_plot(country_idx, predictions_country::AbstractMatrix, e_deaths_country::AbstractMatrix, Rt_country::AbstractMatrix; normalize_pop::Bool = false)
     pop = data.population[country_idx]
     num_total_days = data.num_total_days
     num_observed_days = length(data.cases[country_idx])
@@ -672,7 +838,7 @@ function country_prediction_plot(country_idx, predictions_country::AbstractMatri
     bar!(preproc(daily_deaths), label="$(country_name) (observed)", alpha=0.5)
 
     p3 = plot(; legend = :bottomleft, xaxis=false)
-    plot_confidence_timeseries!(p3, Rₜ_country; no_label = true)
+    plot_confidence_timeseries!(p3, Rt_country; no_label = true)
     for (c_idx, c_time) in enumerate(findfirst.(==(1), eachcol(data.covariates[country_idx])))
         if c_time !== nothing
             # c_name = names(covariates)[2:end][c_idx]
@@ -683,8 +849,8 @@ function country_prediction_plot(country_idx, predictions_country::AbstractMatri
             end
         end
     end
-    title!("Rₜ")
-    qs = [quantile(v, [0.025, 0.975]) for v in eachrow(Rₜ_country)]
+    title!("Rt")
+    qs = [quantile(v, [0.025, 0.975]) for v in eachrow(Rt_country)]
     lq, hq = (eachrow(hcat(qs...))..., )
     ylims!(0, maximum(hq) + 0.1)
 
@@ -699,13 +865,13 @@ function country_prediction_plot(country_idx, predictions_country::AbstractMatri
     vals = preproc(cumsum(e_deaths_country; dims = 1))
     p5 = plot(; legend = :topleft, xaxis=false)
     plot_confidence_timeseries!(p5, vals; label = "$(country_name)")
-    plot!(preproc(cumsum(daily_deaths)), label="observed", color=:red)
+    plot!(preproc(cumsum(daily_deaths)), label="observed/recorded", color=:red)
     title!("Expected deaths (pred)")
 
     vals = preproc(cumsum(predictions_country; dims = 1))
     p6 = plot(; legend = :topleft)
     plot_confidence_timeseries!(p6, vals; label = "$(country_name)")
-    plot!(preproc(daily_cases), label="observed", color=:red)
+    plot!(preproc(daily_cases), label="observed/recorded", color=:red)
     title!("Expected cases (pred)")
 
     p = plot(p1, p3, p2, p4, p5, p6, layout=(6, 1), size=(900, 1200), sharex=true)
@@ -714,46 +880,62 @@ function country_prediction_plot(country_idx, predictions_country::AbstractMatri
     return p
 end
                                         
-function country_prediction_plot(country_idx, cases, e_deaths, Rₜ; kwargs...)
+function country_prediction_plot(country_idx, cases, e_deaths, Rt; kwargs...)
     n = length(cases)
     e_deaths_country = hcat([e_deaths[t][country_idx] for t = 1:n]...)
-    Rₜ_country = hcat([Rₜ[t][country_idx] for t = 1:n]...)
+    Rt_country = hcat([Rt[t][country_idx] for t = 1:n]...)
     predictions_country = hcat([cases[t][country_idx] for t = 1:n]...)
 
-    return country_prediction_plot(country_idx, predictions_country, e_deaths_country, Rₜ_country; kwargs...)
+    return country_prediction_plot(country_idx, predictions_country, e_deaths_country, Rt_country; kwargs...)
 end
 #+end_src
+
+#+RESULTS:
+: country_prediction_plot (generic function with 2 methods)
 
 #+HTML: </details>
 
 * Prior
-Before we do any inference, it can be useful to inspect the /prior/ distribution, in particular if you are working with a hierarchical model where the dependencies in the prior might lead to some unexpected behavior. In Turing.jl you can sample a chain from the prior using =sample=, much in the same way as you would sample from the posterior.
+Before we do any inference it can be useful to inspect the /prior/ distribution, in particular if you are working with a hierarchical model where the dependencies in the prior might lead to some unexpected behavior. In Turing.jl you can sample a chain from the prior using =sample=, much in the same way as you would sample from the posterior.
 
 #+begin_src julia
 chain_prior = sample(m, Turing.Inference.PriorSampler(), 1_000);
 #+end_src
 
-#+begin_src julia
+#+RESULTS:
+
+#+begin_src julia :file figures/uk-prior-kappa-phi-tau-sample-plot.png
 plot(chain_prior[[:ϕ, :τ, :κ]]; α = .5, linewidth=1.5)
 #+end_src
+
+#+RESULTS:
+[[file:figures/uk-prior-kappa-phi-tau-sample-plot.png]]
 
 For the same reasons it can be very useful to inspect the /predictive prior/.
 
 #+begin_src julia
 # Compute the "generated quantities" for the PRIOR
 generated_prior = vectup2tupvec(generated_quantities(m, chain_prior));
-daily_cases_prior, daily_deaths_prior, Rₜ_prior, Rₜ_adj_prior = generated_prior;
+daily_cases_prior, daily_deaths_prior, Rt_prior, Rt_adj_prior = generated_prior;
 #+end_src
 
-#+begin_src julia
-country_prediction_plot(uk_index, daily_cases_prior, daily_deaths_prior, Rₜ_prior)
+#+RESULTS:
+
+#+begin_src julia :file figures/uk-predictive-prior-Rt.png
+country_prediction_plot(uk_index, daily_cases_prior, daily_deaths_prior, Rt_prior)
 #+end_src
 
-And with the Rₜ /adjusted for remaining population/:
+#+RESULTS:
+[[file:figures/uk-predictive-prior-Rt.png]]
 
-#+begin_src julia
-country_prediction_plot(uk_index, daily_cases_prior, daily_deaths_prior, Rₜ_adj_prior)
+And with the Rt /adjusted for remaining population/:
+
+#+begin_src julia :file figures/uk-predictive-prior-Rt-adjusted.png
+country_prediction_plot(uk_index, daily_cases_prior, daily_deaths_prior, Rt_adj_prior)
 #+end_src
+
+#+RESULTS:
+[[file:figures/uk-predictive-prior-Rt-adjusted.png]]
 
 At this point it might be useful to remind ourselves of the total population of UK is:
 
@@ -761,10 +943,13 @@ At this point it might be useful to remind ourselves of the total population of 
 data.population[uk_index]
 #+end_src
 
+#+RESULTS:
+: 67886004
+
 As we can see from the figures, the prior allows scenarios such as
 - /all/ of the UK being infected
-- effects of interventions, e.g. =lockdown=, having a /negative/ effect on =Rₜ= (in the sense that it can actually /increase/ the spread)
-But at the same time, it's clear that a very sudden increase jump from 0% to 100% of the population being infected is almost impossible under the prior. All in all, it seems the model prior seems reasonable: it allows for extreme situations without putting too much probabilty "mass" on those, while still encoding some structure in the model.
+- effects of interventions, e.g. =lockdown=, having a /negative/ effect on =Rt= (in the sense that it can actually /increase/ the spread)
+But at the same time, it's clear that a very sudden increase jump from 0% to 100% of the population being infected is almost impossible under the prior. All in all, the model prior seems a reasonable choice: it allows for extreme situations without putting too much probabilty "mass" on those, while still encoding some structure in the model.
 
 * Posterior inference
 #+begin_src julia
@@ -774,6 +959,8 @@ parameters = (
 );
 #+end_src
 
+#+RESULTS:
+
 ** Inference
 *** Run
 To perform inference for the model we would simply run the code below:
@@ -781,13 +968,13 @@ To perform inference for the model we would simply run the code below:
 chains_posterior = sample(m_no_pred, NUTS(parameters.warmup, 0.95, 10), parameters.steps + parameters.warmup)
 #+end_src
 
-/But/ unfortunately it takes quite a while to run. Performing inference using =NUTS= with =1000= steps for adaptation/warmup and =3000= sample steps takes ~4hrs on a 6-core computer with =JULIA_NUM_THREADS = 6=. And so we're instead just going to load in the chains needed.
+/But/ unfortunately it takes quite a while to run. Performing inference using =NUTS= with =1000= steps for adaptation/warmup and =3000= sample steps takes ~2hrs on a 6-core computer with =JULIA_NUM_THREADS = 6=. And so we're instead just going to load in the chains needed.
 
-In contrast, =Stan= only takes roughly 1hr /on a single thread/ using the base model from the repository. On a single thread =Turing.jl= is ~10X slower for this model. This is quite signficant.
+In contrast, =Stan= only takes roughly 1hr /on a single thread/ using the base model from the repository. On a single thread =Turing.jl= is ~4-5X slower for this model, which is quite signficant.
 
-This generally means that if you have a clear model in mind (or you're already very familiar with =Stan=), you probably want to use =Stan= for these kind of models. On the other hand, if you're in the process of heavily tweaking your model and need to be able to do =m = model(data...); m()= to check if it works, or you want more flexibility in what you can do with your model, =Turing.jl= might be the best option.
+This generally means that if you have a clear model in mind (or you're already very familiar with =Stan=), you probably want to use =Stan= for these kind of models. On the other hand, if you're in the process of heavily tweaking your model and need to be able to do =m = model(data...); m()= to check if it works, or you want more flexibility in what you can do with your model, =Turing.jl= might be a good option.
 
-And this is an additional reason why we wanted to perform this replication study: we want =Turing.jl= to be /useful/ and the way to check this is by applying =Turing.jl= to real-world problem rather than just benchmarks (though those are important too).
+And this is an additional reason why we wanted to perform this replication study: we want =Turing.jl= to be /useful/ and the way to check this is by applying =Turing.jl= to real-world problem rather than /just/ benchmarks (though those are important too).
 
 And regarding the performance difference, it really comes down to the difference in implementation of automatic differentation (AD). =Turing.jl= allows you to choose from the goto AD packages in Julia, e.g. in our runs we used [[https://github.com/JuliaDiff/ForwardDiff.jl][ForwardDiff.jl]], while =Stan= as a very, very fast AD implementation written exclusively for =Stan=. This difference becomes very clear in models such as this one where we have a lot of for-loops and recursive relationships (because this means that we can't easily vectorize). For-loops in Julia are generally blazingly fast, but with AD there's a bit of overhead. But that also means that in =Turing.jl= you have the ability to choose between different approaches to AD, i.e. forward-mode or reverse-mode, each with their different tradeoffs, and thus will benefit from potentially interesting future work, e.g. source-to-source AD using [[https://github.com/FluxML/Zygote.jl][Zygote.jl]].[fn:1]
 
@@ -803,44 +990,209 @@ With that, we can load the chains from disk:
 
 #+begin_src julia
 filenames = [
-    projectdir("out", s) for s in readdir(projectdir("out"))
+    relpath(projectdir("out", s)) for s in readdir(projectdir("out"))
     if occursin(savename(parameters), s) && occursin("seed", s)
 ]
 length(filenames)
 #+end_src
 
+#+RESULTS:
+: 4
+
 #+begin_src julia
 chains_posterior_vec = [read(fname, Chains) for fname in filenames]; # read the different chains
 chains_posterior = chainscat(chains_posterior_vec...); # concatenate them
 chains_posterior = chains_posterior[1:3:end] # <= thin so we're left with 1000 samples
-
-# rename some variables to make the chain compatible with new model where we've changed a variable name from μ₀ → μ
-chains_posterior = set_names(chains_posterior, Dict{String, String}(["μ₀[$i]" => "μ[$i]" for i = 1:length(names(chains_posterior[:μ₀]))]))
 #+end_src
 
-#+begin_src julia
+#+RESULTS:
+#+BEGIN_EXAMPLE
+Object of type Chains, with data of type 1000×78×3 Array{Float64,3}
+
+Iterations        = 1:2998
+Thinning interval = 3
+Chains            = 1, 2, 3
+Samples per chain = 1000
+internals         = acceptance_rate, hamiltonian_energy, hamiltonian_energy_error, is_accept, log_density, lp, max_hamiltonian_energy_error, n_steps, nom_step_size, numerical_error, step_size, tree_depth
+parameters        = ifr_noise[1], ifr_noise[2], ifr_noise[3], ifr_noise[4], ifr_noise[5], ifr_noise[6], ifr_noise[7], ifr_noise[8], ifr_noise[9], ifr_noise[10], ifr_noise[11], ifr_noise[12], ifr_noise[13], ifr_noise[14], lockdown[1], lockdown[2], lockdown[3], lockdown[4], lockdown[5], lockdown[6], lockdown[7], lockdown[8], lockdown[9], lockdown[10], lockdown[11], lockdown[12], lockdown[13], lockdown[14], y[1], y[2], y[3], y[4], y[5], y[6], y[7], y[8], y[9], y[10], y[11], y[12], y[13], y[14], α_hier[1], α_hier[2], α_hier[3], α_hier[4], α_hier[5], α_hier[6], γ, κ, μ[1], μ[2], μ[3], μ[4], μ[5], μ[6], μ[7], μ[8], μ[9], μ[10], μ[11], μ[12], μ[13], μ[14], τ, ϕ
+
+2-element Array{ChainDataFrame,1}
+
+Summary Statistics
+     parameters      mean      std  naive_se    mcse        ess   r_hat
+  ─────────────  ────────  ───────  ────────  ──────  ─────────  ──────
+   ifr_noise[1]    1.0011   0.1021    0.0019  0.0015  2932.0567  1.0000
+   ifr_noise[2]    1.0003   0.0984    0.0018  0.0020  3005.2198  0.9996
+   ifr_noise[3]    0.9948   0.0999    0.0018  0.0019  3053.2148  0.9996
+   ifr_noise[4]    1.0029   0.1001    0.0018  0.0023  2930.0994  1.0007
+   ifr_noise[5]    0.9974   0.1012    0.0018  0.0020  2852.4820  1.0005
+   ifr_noise[6]    0.9916   0.0956    0.0017  0.0015  3046.4634  0.9993
+   ifr_noise[7]    0.9944   0.1001    0.0018  0.0020  2735.6888  1.0021
+   ifr_noise[8]    0.9912   0.1016    0.0019  0.0021  3067.4748  1.0005
+   ifr_noise[9]    1.0020   0.0980    0.0018  0.0020  2423.4016  1.0002
+  ifr_noise[10]    1.0147   0.0982    0.0018  0.0017  2799.5798  0.9999
+  ifr_noise[11]    0.9955   0.0987    0.0018  0.0019  2568.5121  1.0013
+  ifr_noise[12]    1.0030   0.1008    0.0018  0.0017  3086.5435  0.9994
+  ifr_noise[13]    1.0009   0.0990    0.0018  0.0021  2790.3241  1.0004
+  ifr_noise[14]    1.0068   0.0962    0.0018  0.0018  2552.6097  0.9996
+    lockdown[1]   -0.0021   0.1069    0.0020  0.0021  2706.9213  0.9993
+    lockdown[2]   -0.0189   0.0852    0.0016  0.0019  1829.4690  1.0012
+    lockdown[3]   -0.0195   0.1022    0.0019  0.0020  2825.7455  0.9993
+    lockdown[4]    0.1267   0.1212    0.0022  0.0042   831.8401  1.0002
+    lockdown[5]    0.0128   0.1085    0.0020  0.0026  1321.8935  1.0008
+    lockdown[6]   -0.0283   0.0935    0.0017  0.0019  1418.7909  1.0011
+    lockdown[7]   -0.0201   0.1177    0.0021  0.0024  2625.7223  1.0000
+    lockdown[8]   -0.0756   0.1140    0.0021  0.0022  1642.8079  0.9997
+    lockdown[9]   -0.0012   0.1034    0.0019  0.0016  2734.9363  0.9996
+   lockdown[10]   -0.0026   0.1334    0.0024  0.0024  3005.9277  0.9994
+   lockdown[11]    0.0087   0.1042    0.0019  0.0016  2822.7506  0.9992
+   lockdown[12]    0.0045   0.1216    0.0022  0.0027  2501.5179  1.0001
+   lockdown[13]   -0.0026   0.1100    0.0020  0.0025  2545.6748  1.0012
+   lockdown[14]    0.0478   0.1162    0.0021  0.0027  1706.4820  1.0010
+           y[1]   46.4383  23.1858    0.4233  0.4868  2386.0344  0.9999
+           y[2]   38.5317  13.1005    0.2392  0.2874  1958.6332  0.9999
+           y[3]   19.4335   9.5841    0.1750  0.2473  1287.9233  0.9999
+           y[4]   72.6812  33.5631    0.6128  0.9727  1091.9024  1.0027
+           y[5]   42.7182  17.2201    0.3144  0.3649  1716.9929  1.0005
+           y[6]    9.1140   4.2425    0.0775  0.0797  2024.8046  1.0000
+           y[7]   29.0969  17.3875    0.3175  0.2716  2410.8193  0.9992
+           y[8]   16.6010  10.8060    0.1973  0.2234  1541.1963  1.0003
+           y[9]   72.6486  33.9504    0.6198  0.7721  1815.8773  0.9993
+          y[10]  140.4307  51.5581    0.9413  1.2643  1288.0214  1.0021
+          y[11]   25.9010  13.3297    0.2434  0.2614  1924.6912  0.9994
+          y[12]   82.1905  43.0910    0.7867  1.0058  1994.1915  1.0007
+          y[13]   53.7862  25.7194    0.4696  0.5148  2112.6082  0.9994
+          y[14]   81.2253  35.3834    0.6460  0.8644  1630.5038  1.0005
+      α_hier[1]    0.0247   0.0506    0.0009  0.0010  2594.6821  1.0007
+      α_hier[2]    0.0296   0.0548    0.0010  0.0012  2358.9473  1.0016
+      α_hier[3]    0.4892   0.1663    0.0030  0.0049  1036.1321  1.0012
+      α_hier[4]    0.0168   0.0359    0.0007  0.0008  2085.6784  1.0008
+      α_hier[5]    1.1229   0.1455    0.0027  0.0028  1754.4547  0.9997
+      α_hier[6]    0.0717   0.1082    0.0020  0.0037   589.3802  1.0025
+              γ    0.1101   0.0657    0.0012  0.0023   543.4732  1.0037
+              κ    1.1471   0.2347    0.0043  0.0053  1533.3092  1.0007
+           μ[1]    3.9813   0.4716    0.0086  0.0109  1650.5822  0.9996
+           μ[2]    3.6135   0.1689    0.0031  0.0043  1389.8969  1.0006
+           μ[3]    4.2813   0.4265    0.0078  0.0164   592.0907  1.0031
+           μ[4]    4.5631   0.3910    0.0071  0.0125   697.3221  1.0048
+           μ[5]    3.9381   0.2982    0.0054  0.0091   840.5478  1.0033
+           μ[6]    4.9616   0.3268    0.0060  0.0067  1695.0212  1.0001
+           μ[7]    3.8714   0.5370    0.0098  0.0084  1800.9081  0.9991
+           μ[8]    6.3770   0.7334    0.0134  0.0169  1199.8237  1.0004
+           μ[9]    4.3805   0.5275    0.0096  0.0131  1550.2812  0.9997
+          μ[10]    2.4311   0.2328    0.0043  0.0079   647.6823  1.0052
+          μ[11]    3.8239   0.3794    0.0069  0.0100  1215.1098  1.0010
+          μ[12]    2.1017   0.3097    0.0057  0.0099   988.5009  1.0028
+          μ[13]    3.9721   0.4624    0.0084  0.0119  1316.8830  0.9998
+          μ[14]    3.7075   0.3512    0.0064  0.0102  1115.3457  1.0008
+              τ   52.8203  17.2966    0.3158  0.4136  1355.0613  1.0004
+              ϕ    6.8790   0.5519    0.0101  0.0101  2812.6168  1.0003
+
+Quantiles
+     parameters     2.5%     25.0%     50.0%     75.0%     97.5%
+  ─────────────  ───────  ────────  ────────  ────────  ────────
+   ifr_noise[1]   0.8019    0.9323    1.0019    1.0724    1.1935
+   ifr_noise[2]   0.8114    0.9329    1.0008    1.0657    1.1920
+   ifr_noise[3]   0.7999    0.9283    0.9954    1.0623    1.1882
+   ifr_noise[4]   0.8059    0.9345    1.0038    1.0719    1.1987
+   ifr_noise[5]   0.7988    0.9290    0.9978    1.0661    1.1959
+   ifr_noise[6]   0.8105    0.9284    0.9895    1.0572    1.1825
+   ifr_noise[7]   0.8024    0.9274    0.9927    1.0600    1.1936
+   ifr_noise[8]   0.7930    0.9243    0.9908    1.0559    1.1955
+   ifr_noise[9]   0.8102    0.9336    1.0023    1.0673    1.1868
+  ifr_noise[10]   0.8285    0.9488    1.0164    1.0796    1.2193
+  ifr_noise[11]   0.7926    0.9290    0.9983    1.0641    1.1840
+  ifr_noise[12]   0.8072    0.9333    1.0015    1.0712    1.2006
+  ifr_noise[13]   0.8048    0.9361    1.0002    1.0690    1.1946
+  ifr_noise[14]   0.8179    0.9418    1.0066    1.0721    1.1968
+    lockdown[1]  -0.2240   -0.0571   -0.0036    0.0521    0.2288
+    lockdown[2]  -0.2093   -0.0651   -0.0116    0.0282    0.1430
+    lockdown[3]  -0.2469   -0.0715   -0.0116    0.0329    0.1908
+    lockdown[4]  -0.0408    0.0316    0.1036    0.1987    0.4167
+    lockdown[5]  -0.2055   -0.0430    0.0064    0.0633    0.2568
+    lockdown[6]  -0.2521   -0.0754   -0.0182    0.0236    0.1447
+    lockdown[7]  -0.2979   -0.0715   -0.0105    0.0397    0.2054
+    lockdown[8]  -0.3504   -0.1342   -0.0533   -0.0014    0.1084
+    lockdown[9]  -0.2275   -0.0499    0.0005    0.0514    0.2181
+   lockdown[10]  -0.2953   -0.0610   -0.0009    0.0549    0.2830
+   lockdown[11]  -0.2068   -0.0434    0.0041    0.0595    0.2352
+   lockdown[12]  -0.2525   -0.0529    0.0014    0.0611    0.2611
+   lockdown[13]  -0.2215   -0.0597   -0.0022    0.0519    0.2328
+   lockdown[14]  -0.1596   -0.0182    0.0263    0.1014    0.3462
+           y[1]  14.8306   29.9829   41.9288   58.3169  100.5237
+           y[2]  19.7647   28.9377   36.5774   45.5141   69.5499
+           y[3]   6.3529   12.5614   17.4990   24.3877   43.2661
+           y[4]  23.4652   48.6544   67.7566   91.0501  152.5388
+           y[5]  15.9470   30.3710   40.3238   52.8219   82.7343
+           y[6]   3.4192    6.1705    8.2256   11.0534   19.4929
+           y[7]   7.8154   16.9869   24.9424   36.3621   74.9021
+           y[8]   4.2702    9.3061   13.9125   20.6639   46.1895
+           y[9]  26.0228   48.1463   66.7242   89.2108  157.8612
+          y[10]  59.5464  103.2204  134.1816  170.9258  258.1249
+          y[11]   8.6770   16.2873   23.2587   32.4366   59.1115
+          y[12]  22.7250   51.6193   74.4397  103.6036  187.7852
+          y[13]  18.1430   35.3752   49.6002   66.5192  116.7060
+          y[14]  30.8264   55.3309   75.5827  100.5668  163.6102
+      α_hier[1]   0.0000    0.0000    0.0019    0.0248    0.1765
+      α_hier[2]   0.0000    0.0000    0.0031    0.0315    0.2044
+      α_hier[3]   0.1427    0.3828    0.4924    0.6015    0.7993
+      α_hier[4]   0.0000    0.0000    0.0012    0.0146    0.1277
+      α_hier[5]   0.8209    1.0280    1.1250    1.2191    1.3991
+      α_hier[6]   0.0000    0.0003    0.0139    0.1088    0.3612
+              γ   0.0127    0.0593    0.1022    0.1495    0.2608
+              κ   0.7538    0.9799    1.1264    1.2909    1.6678
+           μ[1]   3.1502    3.6546    3.9470    4.2642    5.0133
+           μ[2]   3.2833    3.4988    3.6068    3.7261    3.9530
+           μ[3]   3.5862    3.9885    4.2325    4.5304    5.2493
+           μ[4]   3.9237    4.2856    4.5150    4.7955    5.4220
+           μ[5]   3.4762    3.7300    3.8897    4.1093    4.6526
+           μ[6]   4.3534    4.7338    4.9547    5.1783    5.6308
+           μ[7]   2.9072    3.5066    3.8426    4.2107    5.0483
+           μ[8]   4.9969    5.8755    6.3652    6.8593    7.8987
+           μ[9]   3.4066    4.0227    4.3383    4.7113    5.5326
+          μ[10]   2.0718    2.2672    2.3952    2.5638    2.9626
+          μ[11]   3.1531    3.5595    3.7960    4.0641    4.6259
+          μ[12]   1.5835    1.8859    2.0736    2.2889    2.7778
+          μ[13]   3.1743    3.6594    3.9305    4.2536    5.0145
+          μ[14]   3.0966    3.4590    3.6761    3.9298    4.4287
+              τ  26.9661   40.4253   50.5220   62.0736   95.3553
+              ϕ   5.8478    6.5015    6.8573    7.2352    8.0540
+#+END_EXAMPLE
+
+#+begin_src julia :file figures/uk-posterior-kappa-phi-tau-sample-plot.png
 plot(chains_posterior[[:κ, :ϕ, :τ]]; α = .5, linewidth=1.5)
 #+end_src
+
+#+RESULTS:
+[[file:figures/uk-posterior-kappa-phi-tau-sample-plot.png]]
 
 #+begin_src julia
 # Compute generated quantities for the chains pooled together
 pooled_chains = MCMCChains.pool_chain(chains_posterior)
 generated_posterior = vectup2tupvec(generated_quantities(m, pooled_chains));
 
-daily_cases_posterior, daily_deaths_posterior, Rₜ_posterior, Rₜ_adj_posterior = generated_posterior;
+daily_cases_posterior, daily_deaths_posterior, Rt_posterior, Rt_adj_posterior = generated_posterior;
 #+end_src
+
+#+RESULTS:
 
 The predictive posterior:
 
-#+begin_src julia
-country_prediction_plot(uk_index, daily_cases_posterior, daily_deaths_posterior, Rₜ_posterior)
+#+begin_src julia :file figures/uk-predictive-posterior-Rt.png
+country_prediction_plot(uk_index, daily_cases_posterior, daily_deaths_posterior, Rt_posterior)
 #+end_src
 
-and with the adjusted Rₜ:
+#+RESULTS:
+[[file:figures/uk-predictive-posterior-Rt.png]]
 
-#+begin_src julia
-country_prediction_plot(uk_index, daily_cases_posterior, daily_deaths_posterior, Rₜ_adj_posterior)
+and with the adjusted $R_t$:
+
+#+begin_src julia :file figures/uk-predictive-posterior-Rt-adjusted.png
+country_prediction_plot(uk_index, daily_cases_posterior, daily_deaths_posterior, Rt_adj_posterior)
 #+end_src
+
+#+RESULTS:
+[[file:figures/uk-predictive-posterior-Rt-adjusted.png]]
 
 ** All countries: prior vs. posterior predictive
 For the sake of completeness, here are the predictive priors and posteriors for all the 14 countries in a side-by-side comparison.
@@ -851,75 +1203,166 @@ For the sake of completeness, here are the predictive priors and posteriors for 
 country_idx = 0
 #+end_src
 
+#+RESULTS:
+: 0
+
 #+name: plot-next-country-prior
-#+begin_src julia :exports results
+#+begin_src julia :exports results :eval no
 country_idx += 1
-country_prediction_plot(country_idx, daily_cases_prior, daily_deaths_prior, Rₜ_adj_prior)
+country_prediction_plot(country_idx, daily_cases_prior, daily_deaths_prior, Rt_adj_prior)
 #+end_src
 
 #+name: plot-next-country-posterior
-#+begin_src julia :exports results
-country_prediction_plot(country_idx, daily_cases_posterior, daily_deaths_posterior, Rₜ_adj_posterior)
+#+begin_src julia :exports results :eval no
+country_prediction_plot(country_idx, daily_cases_posterior, daily_deaths_posterior, Rt_adj_posterior)
 #+end_src
 
-#+CALL: plot-next-country-prior()
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-01.png]()
 
-#+CALL: plot-next-country-posterior()
+#+RESULTS:
+[[file:figures/country-prior-predictive-01.png]]
 
-#+CALL: plot-next-country-prior()
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-01.png]()
 
-#+CALL: plot-next-country-posterior()
+#+RESULTS:
+[[file:figures/country-posterior-predictive-01.png]]
 
-#+CALL: plot-next-country-prior()
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-02.png]()
 
-#+CALL: plot-next-country-posterior()
+#+RESULTS:
+[[file:figures/country-prior-predictive-02.png]]
 
-#+CALL: plot-next-country-prior()
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-02.png]()
 
-#+CALL: plot-next-country-posterior()
+#+RESULTS:
+[[file:figures/country-posterior-predictive-02.png]]
 
-#+CALL: plot-next-country-prior()
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-03.png]()
 
-#+CALL: plot-next-country-posterior()
+#+RESULTS:
+[[file:figures/country-prior-predictive-03.png]]
 
-#+CALL: plot-next-country-prior()
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-03.png]()
 
-#+CALL: plot-next-country-posterior()
+#+RESULTS:
+[[file:figures/country-posterior-predictive-03.png]]
 
-#+CALL: plot-next-country-prior()
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-04.png]()
 
-#+CALL: plot-next-country-posterior()
+#+RESULTS:
+[[file:figures/country-prior-predictive-04.png]]
 
-#+CALL: plot-next-country-prior()
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-04.png]()
 
-#+CALL: plot-next-country-posterior()
+#+RESULTS:
+[[file:figures/country-posterior-predictive-04.png]]
 
-#+CALL: plot-next-country-prior()
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-05.png]()
 
-#+CALL: plot-next-country-posterior()
+#+RESULTS:
+[[file:figures/country-prior-predictive-05.png]]
 
-#+CALL: plot-next-country-prior()
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-05.png]()
 
-#+CALL: plot-next-country-posterior()
+#+RESULTS:
+[[file:figures/country-posterior-predictive-05.png]]
 
-#+CALL: plot-next-country-prior()
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-06.png]()
 
-#+CALL: plot-next-country-posterior()
+#+RESULTS:
+[[file:figures/country-prior-predictive-06.png]]
 
-#+CALL: plot-next-country-prior()
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-06.png]()
 
-#+CALL: plot-next-country-posterior()
+#+RESULTS:
+[[file:figures/country-posterior-predictive-06.png]]
 
-#+CALL: plot-next-country-prior()
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-07.png]()
 
-#+CALL: plot-next-country-posterior()
+#+RESULTS:
+[[file:figures/country-prior-predictive-07.png]]
+
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-07.png]()
+
+#+RESULTS:
+[[file:figures/country-posterior-predictive-07.png]]
+
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-08.png]()
+
+#+RESULTS:
+[[file:figures/country-prior-predictive-08.png]]
+
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-08.png]()
+
+#+RESULTS:
+[[file:figures/country-posterior-predictive-08.png]]
+
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-09.png]()
+
+#+RESULTS:
+[[file:figures/country-prior-predictive-09.png]]
+
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-09.png]()
+
+#+RESULTS:
+[[file:figures/country-posterior-predictive-09.png]]
+
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-10.png]()
+
+#+RESULTS:
+[[file:figures/country-prior-predictive-10.png]]
+
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-10.png]()
+
+#+RESULTS:
+[[file:figures/country-posterior-predictive-10.png]]
+
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-11.png]()
+
+#+RESULTS:
+[[file:figures/country-prior-predictive-11.png]]
+
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-11.png]()
+
+#+RESULTS:
+[[file:figures/country-posterior-predictive-11.png]]
+
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-12.png]()
+
+#+RESULTS:
+[[file:figures/country-prior-predictive-12.png]]
+
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-12.png]()
+
+#+RESULTS:
+[[file:figures/country-posterior-predictive-12.png]]
+
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-13.png]()
+
+#+RESULTS:
+[[file:figures/country-prior-predictive-13.png]]
+
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-13.png]()
+
+#+RESULTS:
+[[file:figures/country-posterior-predictive-13.png]]
+
+#+CALL: plot-next-country-prior[:file figures/country-prior-predictive-14.png]()
+
+#+RESULTS:
+[[file:figures/country-prior-predictive-14.png]]
+
+#+CALL: plot-next-country-posterior[:file figures/country-posterior-predictive-14.png]()
+
+#+RESULTS:
+[[file:figures/country-posterior-predictive-14.png]]
 
 #+HTML: </div>
 
 ** What if we didn't do any/certain interventions?
 One interesting thing one can do after obtaining estimates for the effect of each of the interventions is to run the model but now /without/ all or a subset of the interventions performed. Thus allowing us to get a sense of what the outcome would have been without those interventions, and also whether or not the interventions have the wanted effect.
 
-=data.covariates[m]= is a binary matrix for each =m= (country index), with =data.covariate[m][:, k]= then being a binary vector representing the time-series for the k-th covariate: =0= means the intervention has not yet been implemented, =1= means that the intervention has been implemented. As an example, if schools and universites were closed after the 45th day for country =m=, then =data.covariate[m][1:45, k]= are all zeros and =data.covariate[m][45:end, k]= are all ones.
+=data.covariates[m]= is a binary matrix for each =m= (country index), with =data.covariate[m][:, k]= then being a binary vector representing the time-series for the k-th covariate: =0= means the intervention has is not implemented, =1= means that the intervention is implemented. As an example, if schools and universites were closed after the 45th day for country =m=, then =data.covariate[m][1:45, k]= are all zeros and =data.covariate[m][45:end, k]= are all ones.
 
 #+begin_src julia
 # Get the index of schools and univerities closing
@@ -928,11 +1371,42 @@ schools_universities_closed_index = findfirst(==("schools_universities"), names_
 data.covariates[uk_index][:, schools_universities_closed_index]
 #+end_src
 
-Notice that this is under the assumptions that not only are schools and universities closed /at some point/, but rather that they also stay closed in the future (at the least the future that we are considering).
+#+RESULTS:
+#+BEGIN_EXAMPLE
+100-element Array{Float64,1}:
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ 0.0
+ ⋮
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+ 1.0
+#+END_EXAMPLE
 
-Therefore we can for example simulate "what happens if we never closed schools and universities?" by instead setting this entire vector to =0= and re-run the model on the infererred parameters, similar to what we did before to compute the "generated quantities", e.g. Rₜ.
+Notice that the above assumes that not only are schools and universities closed /at some point/, but rather that they also stay closed in the future (at the least the future that we are considering).
 
-First a convenience function for zeroing out subsets of the interventions:
+Therefore we can for example simulate "what happens if we never closed schools and universities?" by instead setting this entire vector to =0= and re-run the model on the infererred parameters, similar to what we did before to compute the "generated quantities", e.g. $R_t$.
+
+#+HTML: <details><summary>Convenience function for zeroing out subsets of the interventions</summary>
 
 #+begin_src julia
 """
@@ -961,9 +1435,14 @@ function zero_covariates(xs::AbstractMatrix{<:Real}, names_covariates; remove=[]
 end
 #+end_src
 
+#+RESULTS:
+: zero_covariates (generic function with 2 methods)
+
+#+HTML: </details>
+
 Now we can consider simulation under the posterior with /no/ intervention, and we're going to visualize the respective /portions/ of the population by rescaling by total population:
 
-#+begin_src julia
+#+begin_src julia :file figures/counterfactual-remove-all.png
 # What happens if we don't do anything?
 m_counterfactual = model_def(
     data.num_impute,
@@ -981,14 +1460,17 @@ m_counterfactual = model_def(
 
 # Compute the "generated quantities" for the "counter-factual" model
 generated_counterfactual = vectup2tupvec(generated_quantities(m_counterfactual, pooled_chains));
-daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_counterfactual, Rₜ_adj_counterfactual = generated_counterfactual;
-country_prediction_plot(5, daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_adj_counterfactual; normalize_pop = true)
+daily_cases_counterfactual, daily_deaths_counterfactual, Rt_counterfactual, Rt_adj_counterfactual = generated_counterfactual;
+country_prediction_plot(5, daily_cases_counterfactual, daily_deaths_counterfactual, Rt_adj_counterfactual; normalize_pop = true)
 #+end_src
+
+#+RESULTS:
+[[file:figures/counterfactual-remove-all.png]]
 
 
 We can also consider the cases where we only do /some/ of the interventions, e.g. we never do a full lockdown (=lockdown=) or close schools and universities (=schools_universities=):
 
-#+begin_src julia
+#+begin_src julia :file figures/counterfactual-remove-lockdown-and-schools.png
 # What happens if we never close schools nor do a lockdown?
 m_counterfactual = model_def(
     data.num_impute,
@@ -1006,13 +1488,16 @@ m_counterfactual = model_def(
 
 # Compute the "generated quantities" for the "counter-factual" model
 generated_counterfactual = vectup2tupvec(generated_quantities(m_counterfactual, pooled_chains));
-daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_counterfactual, Rₜ_adj_counterfactual = generated_counterfactual;
-country_prediction_plot(uk_index, daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_adj_counterfactual; normalize_pop = true)
+daily_cases_counterfactual, daily_deaths_counterfactual, Rt_counterfactual, Rt_adj_counterfactual = generated_counterfactual;
+country_prediction_plot(uk_index, daily_cases_counterfactual, daily_deaths_counterfactual, Rt_adj_counterfactual; normalize_pop = true)
 #+end_src
+
+#+RESULTS:
+[[file:figures/counterfactual-remove-lockdown-and-schools.png]]
 
 As mentioned, this assumes that we will stay in lockdown and schools and universities will be closed in the future. We can also consider, say, removing the lockdown, i.e. opening up, at some future point in time:
 
-#+begin_src julia
+#+begin_src julia :file figures/counterfactual-remove-lockdown-after-a-while.png
 lift_lockdown_time = 75
 
 new_covariates = [copy(c) for c in data.covariates] # <= going to do inplace manipulations so we copy
@@ -1037,9 +1522,12 @@ m_counterfactual = model_def(
 
 # Compute the "generated quantities" for the "counter-factual" model
 generated_counterfactual = vectup2tupvec(generated_quantities(m_counterfactual, pooled_chains));
-daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_counterfactual, Rₜ_adj_counterfactual = generated_counterfactual;
-country_prediction_plot(uk_index, daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_adj_counterfactual; normalize_pop = true)
+daily_cases_counterfactual, daily_deaths_counterfactual, Rt_counterfactual, Rt_adj_counterfactual = generated_counterfactual;
+country_prediction_plot(uk_index, daily_cases_counterfactual, daily_deaths_counterfactual, Rt_adj_counterfactual; normalize_pop = true)
 #+end_src
+
+#+RESULTS:
+[[file:figures/counterfactual-remove-lockdown-after-a-while.png]]
 
 * Conclusion
 Well, there isn't one. As stated before, drawing conclusions is not the purpose of this document. With that being said, we /are/ working on exploring this and other models further, e.g. relaxing certain assumptions, model validation & comparison, but this will hopefully be available in a more technical and formal report sometime in the near future after proper validation and analysis. But since time is of the essence in these situations, we thought it was important to make the above and related code available to the public immediately. At the very least it should be comforting to know that two different PPLs both produce the same inference results when the model might be used to inform policy decisions on a national level.
