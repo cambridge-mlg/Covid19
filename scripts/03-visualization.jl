@@ -127,11 +127,18 @@ covariates = [rdata["X"][m, :, :] for m = 1:num_countries]
 data = (; (k => d[String(k)] for k in [:num_countries, :num_impute, :num_obs_countries, :num_total_days, :cases, :deaths, :π, :epidemic_start, :population, :serial_intervals])...)
 data = merge(data, (covariates = covariates, ));
 
+# Can deal with ragged arrays, so we can shave off unobserved data (future) which are just filled with -1
+data = merge(
+    data,
+    (cases = [data.cases[m][1:data.num_obs_countries[m]] for m = 1:data.num_countries],
+     deaths = [data.deaths[m][1:data.num_obs_countries[m]] for m = 1:data.num_countries])
+);
+
 data.num_countries
 
 uk_index = findfirst(==("United_Kingdom"), countries)
 
-@model model_v2(
+@model function model_v2(
     num_impute,        # [Int] num. of days for which to impute infections
     num_total_days,    # [Int] days of observed data + num. of days to forecast
     cases,             # [AbstractVector{<:AbstractVector{<:Int}}] reported cases
@@ -144,14 +151,14 @@ uk_index = findfirst(==("United_Kingdom"), countries)
     lockdown_index,    # [Int] the index for the `lockdown` covariate in `covariates`
     predict=false,     # [Bool] if `false`, will only compute what's needed to `observe` but not more
     ::Type{TV} = Vector{Float64}
-) where {TV} = begin
+) where {TV}
     # `covariates` should be of length `num_countries` and each entry correspond to a matrix of size `(num_total_days, num_covariates)`
     num_covariates = size(covariates[1], 2)
     num_countries = length(cases)
-    num_obs_countries = Vector(undef, num_countries)
-    for m = 1:num_countries
-        num_obs_countries[m] = length(cases[m])
-    end
+    num_obs_countries = length.(cases)
+    
+    # If we don't want to predict the future, we only need to compute up-to time-step `num_obs_countries[m]`
+    last_time_steps = predict ? fill(num_total_days, num_countries) : num_obs_countries
 
     # Latent variables
     τ ~ Exponential(1 / 0.03) # `Exponential` has inverse parameterization of the one in Stan
@@ -169,16 +176,13 @@ uk_index = findfirst(==("United_Kingdom"), countries)
     γ ~ truncated(Normal(0, 0.2), 0, Inf)
     lockdown ~ filldist(Normal(0, γ), num_countries)
 
-    # If we don't want to predict the future, we only need to compute up-to time-step `num_obs_countries[m]`
-    last_time_steps = predict ? fill(num_total_days, num_countries) : num_obs_countries
-
     # Initialization of some quantities
     expected_daily_cases = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
     cases_pred = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
     expected_daily_deaths = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
     Rₜ = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
     Rₜ_adj = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-
+    
     # Loops over countries and perform independent computations for each country
     # since this model does not include any notion of migration across borders.
     # => might has well wrap it in a `@threads` to perform the computation in parallel.
@@ -193,29 +197,27 @@ uk_index = findfirst(==("United_Kingdom"), countries)
         Rₜ_adj_m = Rₜ_adj[m]
         
         last_time_step = last_time_steps[m]
-
+    
         # Imputation of `num_impute` days
-        cases_pred_m[1] = zero(eltype(cases_pred_m))
-        cases_pred_m[2:num_impute] = cumsum(fill(y[m], num_impute - 1)) .+ cases_pred_m[1]
-
         expected_daily_cases_m[1:num_impute] .= y[m]
+        cases_pred_m[1:num_impute] .= cumsum(expected_daily_cases_m[1:num_impute])
         
         xs = covariates[m][1:last_time_step, :] # extract covariates for the wanted time-steps and country `m`
         Rₜ_m .= μ[m] * exp.(xs * (-α) + (- lockdown[m]) * xs[:, lockdown_index])
-
+    
         # adjusts for portion of pop that are susceptible
         Rₜ_adj_m[1:num_impute] .= (max.(pop_m .- cases_pred_m[1:num_impute], zero(cases_pred_m[1])) ./ pop_m) .* Rₜ_m[1:num_impute]
-
+    
         for t = (num_impute + 1):last_time_step
             cases_pred_m[t] = cases_pred_m[t - 1] + expected_daily_cases_m[t - 1]
-
+    
             Rₜ_adj_m[t] = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
-            expected_daily_cases_m[t] = Rₜ_adj_m[t] * sum([expected_daily_cases_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1)])
+            expected_daily_cases_m[t] = Rₜ_adj_m[t] * sum(expected_daily_cases_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1))
         end
-
+    
         expected_daily_deaths_m[1] = 1e-15 * expected_daily_cases_m[1]
         for t = 2:last_time_step
-            expected_daily_deaths_m[t] = sum([expected_daily_cases_m[τ] * πₘ[t - τ] * ifr_noise[m] for τ = 1:(t - 1)])
+            expected_daily_deaths_m[t] = sum(expected_daily_cases_m[τ] * πₘ[t - τ] * ifr_noise[m] for τ = 1:(t - 1))
         end
     end
 
@@ -230,9 +232,8 @@ uk_index = findfirst(==("United_Kingdom"), countries)
         # Observe!
         logps[m] = logpdf(arraydist(NegativeBinomial2.(expected_daily_deaths_m[ts], ϕ)), deaths[m][ts])
     end
-    _varinfo.logp[] += sum(logps)
+    Turing.acclogp!(_varinfo, sum(logps))
 
-    # These are the "generated quantities" that we're interested in analysing
     return (
         expected_daily_cases = expected_daily_cases,
         expected_daily_deaths = expected_daily_deaths,
@@ -282,8 +283,8 @@ pyplot()
 # Ehh, this can be made nicer...
 function country_prediction_plot(country_idx, predictions_country::AbstractMatrix, e_deaths_country::AbstractMatrix, Rₜ_country::AbstractMatrix; normalize_pop::Bool = false)
     pop = data.population[country_idx]
-    num_total_days = length(data.deaths[country_idx])
-    num_observed_days = data.num_obs_countries[country_idx]
+    num_total_days = data.num_total_days
+    num_observed_days = length(data.cases[country_idx])
 
     country_name = countries[country_idx]
     start_date = first(country_to_dates[country_name])
@@ -293,14 +294,14 @@ function country_prediction_plot(country_idx, predictions_country::AbstractMatri
     # A tiny bit of preprocessing of the data
     preproc(x) = normalize_pop ? x ./ pop : x
 
-    daily_deaths = data.deaths[country_idx][1:num_observed_days]
-    daily_cases = data.cases[country_idx][1:num_observed_days]
+    daily_deaths = data.deaths[country_idx]
+    daily_cases = data.cases[country_idx]
     
     p1 = plot(; xaxis = false, legend = :topleft)
     bar!(preproc(daily_deaths), label="$(country_name)")
     title!("Observed daily deaths")
     vline!([data.epidemic_start[country_idx]], label="epidemic start", linewidth=2)
-    vline!([data.num_obs_countries[country_idx]], label="end of observations", linewidth=2)
+    vline!([num_observed_days], label="end of observations", linewidth=2)
     xlims!(0, num_total_days)
 
     p2 = plot(; legend = :topleft, xaxis=false)
