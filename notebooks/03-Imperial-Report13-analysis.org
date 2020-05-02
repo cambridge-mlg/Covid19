@@ -349,6 +349,8 @@ uk_index = findfirst(==("United_Kingdom"), countries)
 #+RESULTS:
 : 5
 
+It's worth noting that the data user here is not quite up-to-date for UK because on <2020-04-30> they updated their /past/ numbers by including deaths from care/nursing homes (data source: [[https://www.ecdc.europa.eu/en][ECDC]]). Thus if you compare the prediction of the model to real numbers, it's likely that the real numbers will be a bit higher than what the model predicts.
+
 * Model
 For a thorough description of the model and the assumptions that have gone into it, we recommend looking at the [[https://www.imperial.ac.uk/mrc-global-infectious-disease-analysis/covid-19/report-13-europe-npi-impact/][original paper]] or their very nice [[https://github.com/ImperialCollegeLondon/covid19model/tree/6ee3010a58a57cc14a16545ae897ca668b7c9096/Technical_description_of_Imperial_COVID_19_Model.pdf][techical report from the repository]]. The model described here is the one corresponding to the technical report linked. The link points to the correct commit ID and so should be consistent with this post despite potential changes to the "official" model made in the future.
 
@@ -627,13 +629,13 @@ Turing.acclogp!(_varinfo, sum(logps))
 
 #+HTML: <details><summary>Explanation of what we just did</summary>
 
-It might be worth explaining a bit about what's going on here. First we should explain what the deal is with =_varinfo.logp[]=. =_varinfo= is basically the object used internally in Turing to track the sampled variables and the logpdf /for a particular evaluation/ of the model. The logpdf is stored in the =_varinfo.logp= field, which is a reference/pointer for performance reasons. =[]= deferences this, allowing us to mutate the value that it's pointing to. With that we can explain what happens to =~= inside the =@macro=. Using the old observe-snippet as an example, the =@model= macro replaces =~= with
+It might be worth explaining a bit about what's going on here. First we should explain what the deal is with =_varinfo=. =_varinfo= is basically the object used internally in Turing to track the sampled variables and the log-pdf /for a particular evaluation/ of the model, and so =acclogp!(_varinfo, lp)= will increment the log-pdf stored in =_varinfo= by =lp=. With that we can explain what happens to =~= inside the =@macro=. Using the old observe-snippet as an example, the =@model= macro replaces =~= with
 
 #+begin_src julia :eval no :tangle no
-_varinfo.logp[] += logpdf(arraydist(NegativeBinomial2.(expected_daily_deaths_m[ts], ϕ)), deaths[m][ts])
+acclogp!(_varinfo., logpdf(arraydist(NegativeBinomial2.(expected_daily_deaths_m[ts], ϕ)), deaths[m][ts]))
 #+end_src
 
-But we're iterating through =m=, so this would not be thread-safe since you might be two threads attempting to mutate =varinfo.logp[]= simultaneously.[fn:2] Therefore, since no threads sees the same =m=, delaying the accumulation to after having computed all the log-pdf in parallel leaves us with equivalent code that is threadsafe.
+But we're iterating through =m=, so this would not be thread-safe since you might be two threads attempting to mutate =_varinfo= simultaneously.[fn:2] Therefore, since no threads sees the same =m=, delaying the accumulation to after having computed all the log-pdf in parallel leaves us with equivalent code that is threadsafe.
 
 You can read more about the =@macro= and its internals [[https://turing.ml/dev/docs/for-developers/compiler#model-macro-and-modelgen][here]].
 
@@ -993,16 +995,30 @@ filenames = [
     relpath(projectdir("out", s)) for s in readdir(projectdir("out"))
     if occursin(savename(parameters), s) && occursin("seed", s)
 ]
+filenames = [
+    "out/chains_model=imperial-report13-v2-vectorized-non-predict-4-threads_seed=2_steps=3000_warmup=1000_with_lockdown=true.jls",
+    "out/chains_model=imperial-report13-v2-vectorized-non-predict-6-threads_seed=1_steps=3000_warmup=1000_with_lockdown=true.jls",
+    "out/chains_model=imperial-report13-v2-vectorized-non-predict-6-threads_seed=3_steps=3000_warmup=1000_with_lockdown=true.jls",
+    "out/chains_model=imperial-report13-v2-vectorized-non-predict-6-threads_seed=4_steps=3000_warmup=1000_with_lockdown=true.jls",
+]
+filenames = [
+     "out/chains_model=imperial-report13-v2-vectorized-non-predict-6-threads-updated-full-truncation_seed=1_steps=3000_warmup=1000_with_lockdown=true.jls",
+    "out/chains_model=imperial-report13-v2-vectorized-non-predict-6-threads-updated-full-truncation_seed=2_steps=3000_warmup=1000_with_lockdown=true.jls",
+    "out/chains_model=imperial-report13-v2-vectorized-non-predict-6-threads-updated-full-truncation_seed=4_steps=3000_warmup=1000_with_lockdown=true.jls"
+]
 length(filenames)
 #+end_src
 
 #+RESULTS:
-: 4
+: 3
 
 #+begin_src julia
 chains_posterior_vec = [read(fname, Chains) for fname in filenames]; # read the different chains
 chains_posterior = chainscat(chains_posterior_vec...); # concatenate them
 chains_posterior = chains_posterior[1:3:end] # <= thin so we're left with 1000 samples
+
+# rename some variables to make the chain compatible with new model where we've changed a variable name from μ₀ → μ
+# chains_posterior = set_names(chains_posterior, Dict{String, String}(["μ₀[$i]" => "μ[$i]" for i = 1:length(names(chains_posterior[:μ₀]))]))
 #+end_src
 
 #+RESULTS:
