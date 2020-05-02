@@ -211,6 +211,13 @@ covariates = [rdata["X"][m, :, :] for m = 1:num_countries]
 
 data = (; (k => d[String(k)] for k in [:num_countries, :num_impute, :num_obs_countries, :num_total_days, :cases, :deaths, :π, :epidemic_start, :population, :serial_intervals])...)
 data = merge(data, (covariates = covariates, ));
+
+# Can deal with ragged arrays, so we can shave off unobserved data (future) which are just filled with -1
+data = merge(
+    data,
+    (cases = [data.cases[m][1:data.num_obs_countries[m]] for m = 1:data.num_countries],
+     deaths = [data.deaths[m][1:data.num_obs_countries[m]] for m = 1:data.num_countries])
+);
 #+end_src
 
 #+HTML: </details>
@@ -274,6 +281,127 @@ where
 To see the reasoning for the choices of distributions and parameters for the priors, see the either the paper or the [[https://github.com/ImperialCollegeLondon/covid19model/tree/6ee3010a58a57cc14a16545ae897ca668b7c9096/Technical_description_of_Imperial_COVID_19_Model.pdf][techical report from the repository]].
 
 ** Code
+#+name: jl:model-setup
+#+begin_src julia :exports none :eval no :tangle no
+# `covariates` should be of length `num_countries` and each entry correspond to a matrix of size `(num_total_days, num_covariates)`
+num_covariates = size(covariates[1], 2)
+num_countries = length(cases)
+num_obs_countries = length.(cases)
+
+# If we don't want to predict the future, we only need to compute up-to time-step `num_obs_countries[m]`
+last_time_steps = predict ? fill(num_total_days, num_countries) : num_obs_countries
+#+end_src
+
+#+name: jl:country-computation
+#+begin_src julia :exports none :eval no :tangle no
+function country_computation!(
+    expected_daily_cases_m, expected_daily_deaths_m, cases_pred_m, Rₜ_m, Rₜ_adj_m,
+    pop_m, π_m, last_time_step, covariates_m, ifr_noise_m, μ_m, y_m, α, lockdown_m, lockdown_index, serial_intervals, num_impute
+)
+    # Imputation of `num_impute` days
+    expected_daily_cases_m[1:num_impute] .= y_m
+    cases_pred_m[1:num_impute] .= cumsum(expected_daily_cases_m[1:num_impute])
+    
+    xs = covariates_m[1:last_time_step, :] # extract covariates for the wanted time-steps and country `m`
+    Rₜ_m .= μ_m * exp.(xs * (-α) + (- lockdown_m) * xs[:, lockdown_index])
+
+    # adjusts for portion of pop that are susceptible
+    Rₜ_adj_m[1:num_impute] .= (max.(pop_m .- cases_pred_m[1:num_impute], zero(cases_pred_m[1])) ./ pop_m) .* Rₜ_m[1:num_impute]
+
+    for t = (num_impute + 1):last_time_step
+        cases_pred_m[t] = cases_pred_m[t - 1] + expected_daily_cases_m[t - 1]
+
+        Rₜ_adj_m[t] = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
+        expected_daily_cases_m[t] = Rₜ_adj_m[t] * sum(expected_daily_cases_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1))
+    end
+
+    expected_daily_deaths_m[1] = 1e-15 * expected_daily_cases_m[1]
+    for t = 2:last_time_step
+        expected_daily_deaths_m[t] = sum(expected_daily_cases_m[τ] * π_m[t - τ] * ifr_noise_m for τ = 1:(t - 1))
+    end
+
+    return
+end
+#+end_src
+
+#+name: jl:inner-model-computation-function-based
+#+begin_src julia :exports none :eval no :tangle no
+# Initialization of some quantities
+expected_daily_cases = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+cases_pred = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+expected_daily_deaths = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+Rₜ = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+Rₜ_adj = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+
+# Loops over countries and perform independent computations for each country
+# since this model does not include any notion of migration across borders.
+# => might has well wrap it in a `@threads` to perform the computation in parallel.
+@threads for m = 1:num_countries
+    country_computation!(
+        expected_daily_cases[m], expected_daily_deaths[m], cases_pred[m], Rₜ[m], Rₜ_adj[m], # <= mutated
+        population[m], π[m], last_time_steps[m], covariates[m], ifr_noise[m], μ[m], y[m], α, lockdown[m], lockdown_index, serial_intervals, num_impute
+    )
+end
+#+end_src
+
+#+name: jl:inner-model-computation
+#+begin_src julia :exports none :eval no :tangle no
+# Initialization of some quantities
+expected_daily_cases = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+cases_pred = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+expected_daily_deaths = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+Rₜ = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+Rₜ_adj = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+
+# Loops over countries and perform independent computations for each country
+# since this model does not include any notion of migration across borders.
+# => might has well wrap it in a `@threads` to perform the computation in parallel.
+@threads for m = 1:num_countries
+    # country-specific parameters
+    πₘ = π[m]
+    pop_m = population[m]
+    expected_daily_cases_m = expected_daily_cases[m]
+    cases_pred_m = cases_pred[m]
+    expected_daily_deaths_m = expected_daily_deaths[m]
+    Rₜ_m = Rₜ[m]
+    Rₜ_adj_m = Rₜ_adj[m]
+    
+    last_time_step = last_time_steps[m]
+
+    # Imputation of `num_impute` days
+    expected_daily_cases_m[1:num_impute] .= y[m]
+    cases_pred_m[1:num_impute] .= cumsum(expected_daily_cases_m[1:num_impute])
+    
+    xs = covariates[m][1:last_time_step, :] # extract covariates for the wanted time-steps and country `m`
+    Rₜ_m .= μ[m] * exp.(xs * (-α) + (- lockdown[m]) * xs[:, lockdown_index])
+
+    # adjusts for portion of pop that are susceptible
+    Rₜ_adj_m[1:num_impute] .= (max.(pop_m .- cases_pred_m[1:num_impute], zero(cases_pred_m[1])) ./ pop_m) .* Rₜ_m[1:num_impute]
+
+    for t = (num_impute + 1):last_time_step
+        cases_pred_m[t] = cases_pred_m[t - 1] + expected_daily_cases_m[t - 1]
+
+        Rₜ_adj_m[t] = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
+        expected_daily_cases_m[t] = Rₜ_adj_m[t] * sum(expected_daily_cases_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1))
+    end
+
+    expected_daily_deaths_m[1] = 1e-15 * expected_daily_cases_m[1]
+    for t = 2:last_time_step
+        expected_daily_deaths_m[t] = sum(expected_daily_cases_m[τ] * πₘ[t - τ] * ifr_noise[m] for τ = 1:(t - 1))
+    end
+end
+#+end_src
+
+#+name: jl:model-return
+#+begin_src julia :eval no :tangle no :exports none
+return (
+    expected_daily_cases = expected_daily_cases,
+    expected_daily_deaths = expected_daily_deaths,
+    Rₜ = Rₜ,
+    Rₜ_adjusted = Rₜ_adj
+)
+#+end_src
+
 In =Turing.jl=, a "sample"-statement is defined by =x ~ Distribution=. Therefore, if we convert the priors from the model into a block of code that will go into the =Turing.jl= =Model=, we get:
 
 #+name: jl:priors
@@ -299,7 +427,7 @@ The only anamoly in the above snippet is the use of =filldist= which is just a w
 And the full model is defined:
 
 #+begin_src julia :noweb yes :tangle no
-@model model_v2(
+@model function model_v2(
     num_impute,        # [Int] num. of days for which to impute infections
     num_total_days,    # [Int] days of observed data + num. of days to forecast
     cases,             # [AbstractVector{<:AbstractVector{<:Int}}] reported cases
@@ -312,77 +440,18 @@ And the full model is defined:
     lockdown_index,    # [Int] the index for the `lockdown` covariate in `covariates`
     predict=false,     # [Bool] if `false`, will only compute what's needed to `observe` but not more
     ::Type{TV} = Vector{Float64}
-) where {TV} = begin
-    # `covariates` should be of length `num_countries` and each entry correspond to a matrix of size `(num_total_days, num_covariates)`
-    num_covariates = size(covariates[1], 2)
-    num_countries = length(cases)
-    num_obs_countries = Vector(undef, num_countries)
-    for m = 1:num_countries
-        num_obs_countries[m] = length(cases[m])
-    end
+) where {TV}
+    <<jl:model-setup>>
 
     # Latent variables
     <<jl:priors>>
-    
-    # If we don't want to predict the future, we only need to compute up-to time-step `num_obs_countries[m]`
-    last_time_steps = predict ? fill(num_total_days, num_countries) : num_obs_countries
 
-    # Initialization of some quantities
-    daily_cases_pred = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-    cases_pred = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-    expected_daily_deaths = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-    Rₜ = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-    Rₜ_adj = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-
-    # Loops over countries and perform independent computations for each country
-    # since this model does not include any notion of migration across borders.
-    # => might has well wrap it in a `@threads` to perform the computation in parallel.
-    @threads for m = 1:num_countries
-        # country-specific parameters
-        πₘ = π[m]
-        pop_m = population[m]
-        daily_cases_pred_m = daily_cases_pred[m]
-        cases_pred_m = cases_pred[m]
-        expected_daily_deaths_m = expected_daily_deaths[m]
-        Rₜ_m = Rₜ[m]
-        Rₜ_adj_m = Rₜ_adj[m]
-        
-        last_time_step = last_time_steps[m]
-
-        # Imputation of `num_impute` days
-        cases_pred_m[1] = zero(eltype(cases_pred_m))
-        cases_pred_m[2:num_impute] = cumsum(fill(y[m], num_impute - 1)) .+ cases_pred_m[1]
-
-        daily_cases_pred_m[1:num_impute] .= y[m]
-        
-        xs = covariates[m][1:last_time_step, :] # extract covariates for the wanted time-steps and country `m`
-        Rₜ_m .= μ[m] * exp.(xs * (-α) + (- lockdown[m]) * xs[:, lockdown_index])
-
-        # adjusts for portion of pop that are susceptible
-        Rₜ_adj_m[1:num_impute] .= (max.(pop_m .- cases_pred_m[1:num_impute], zero(cases_pred_m[1])) ./ pop_m) .* Rₜ_m[1:num_impute]
-
-        for t = (num_impute + 1):last_time_step
-            cases_pred_m[t] = cases_pred_m[t - 1] + daily_cases_pred_m[t - 1]
-
-            Rₜ_adj_m[t] = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
-            daily_cases_pred_m[t] = Rₜ_adj_m[t] * sum([daily_cases_pred_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1)])
-        end
-
-        expected_daily_deaths_m[1] = 1e-15 * daily_cases_pred_m[1]
-        for t = 2:last_time_step
-            expected_daily_deaths_m[t] = sum([daily_cases_pred_m[τ] * πₘ[t - τ] * ifr_noise[m] for τ = 1:(t - 1)])
-        end
-    end
+    <<jl:inner-model-computation>>
 
     # Observe
     <<jl:observe>>
 
-    return (
-        daily_cases_pred = daily_cases_pred,
-        expected_daily_deaths = expected_daily_deaths,
-        Rₜ = Rₜ,
-        Rₜ_adjusted = Rₜ_adj
-    )
+    <<jl:model-return>>
 end;
 #+end_src
 
@@ -431,7 +500,7 @@ logps = TV(undef, num_countries)
     # Observe!
     logps[m] = logpdf(arraydist(NegativeBinomial2.(expected_daily_deaths_m[ts], ϕ)), deaths[m][ts])
 end
-_varinfo.logp[] += sum(logps)
+Turing.acclogp!(_varinfo, sum(logps))
 #+end_src
 
 #+HTML: <details><summary>Explanation of what we just did</summary>
@@ -452,7 +521,7 @@ You can read more about the =@macro= and its internals [[https://turing.ml/dev/d
 This results in the following model definition
 
 #+begin_src julia :noweb yes
-@model model_v2(
+@model function model_v2(
     num_impute,        # [Int] num. of days for which to impute infections
     num_total_days,    # [Int] days of observed data + num. of days to forecast
     cases,             # [AbstractVector{<:AbstractVector{<:Int}}] reported cases
@@ -465,78 +534,50 @@ This results in the following model definition
     lockdown_index,    # [Int] the index for the `lockdown` covariate in `covariates`
     predict=false,     # [Bool] if `false`, will only compute what's needed to `observe` but not more
     ::Type{TV} = Vector{Float64}
-) where {TV} = begin
-    # `covariates` should be of length `num_countries` and each entry correspond to a matrix of size `(num_total_days, num_covariates)`
-    num_covariates = size(covariates[1], 2)
-    num_countries = length(cases)
-    num_obs_countries = Vector(undef, num_countries)
-    for m = 1:num_countries
-        num_obs_countries[m] = length(cases[m])
-    end
+) where {TV}
+    <<jl:model-setup>>
 
     # Latent variables
     <<jl:priors>>
 
-    # If we don't want to predict the future, we only need to compute up-to time-step `num_obs_countries[m]`
-    last_time_steps = predict ? fill(num_total_days, num_countries) : num_obs_countries
-
-    # Initialization of some quantities
-    expected_daily_cases = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-    cases_pred = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-    expected_daily_deaths = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-    Rₜ = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-    Rₜ_adj = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-
-    # Loops over countries and perform independent computations for each country
-    # since this model does not include any notion of migration across borders.
-    # => might has well wrap it in a `@threads` to perform the computation in parallel.
-    @threads for m = 1:num_countries
-        # country-specific parameters
-        πₘ = π[m]
-        pop_m = population[m]
-        expected_daily_cases_m = expected_daily_cases[m]
-        cases_pred_m = cases_pred[m]
-        expected_daily_deaths_m = expected_daily_deaths[m]
-        Rₜ_m = Rₜ[m]
-        Rₜ_adj_m = Rₜ_adj[m]
-        
-        last_time_step = last_time_steps[m]
-
-        # Imputation of `num_impute` days
-        cases_pred_m[1] = zero(eltype(cases_pred_m))
-        cases_pred_m[2:num_impute] = cumsum(fill(y[m], num_impute - 1)) .+ cases_pred_m[1]
-
-        expected_daily_cases_m[1:num_impute] .= y[m]
-        
-        xs = covariates[m][1:last_time_step, :] # extract covariates for the wanted time-steps and country `m`
-        Rₜ_m .= μ[m] * exp.(xs * (-α) + (- lockdown[m]) * xs[:, lockdown_index])
-
-        # adjusts for portion of pop that are susceptible
-        Rₜ_adj_m[1:num_impute] .= (max.(pop_m .- cases_pred_m[1:num_impute], zero(cases_pred_m[1])) ./ pop_m) .* Rₜ_m[1:num_impute]
-
-        for t = (num_impute + 1):last_time_step
-            cases_pred_m[t] = cases_pred_m[t - 1] + expected_daily_cases_m[t - 1]
-
-            Rₜ_adj_m[t] = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
-            expected_daily_cases_m[t] = Rₜ_adj_m[t] * sum([expected_daily_cases_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1)])
-        end
-
-        expected_daily_deaths_m[1] = 1e-15 * expected_daily_cases_m[1]
-        for t = 2:last_time_step
-            expected_daily_deaths_m[t] = sum([expected_daily_cases_m[τ] * πₘ[t - τ] * ifr_noise[m] for τ = 1:(t - 1)])
-        end
-    end
+    <<jl:inner-model-computation>>
 
     # Observe
     <<jl:observe-threaded>>
 
-    # These are the "generated quantities" that we're interested in analysing
-    return (
-        expected_daily_cases = expected_daily_cases,
-        expected_daily_deaths = expected_daily_deaths,
-        Rₜ = Rₜ,
-        Rₜ_adjusted = Rₜ_adj
-    )
+    <<jl:model-return>>
+end;
+#+end_src
+
+
+#+begin_src julia :noweb yes :eval no :exports none :tangle no
+<<jl:country-computation>>
+
+@model function model_v2(
+    num_impute,        # [Int] num. of days for which to impute infections
+    num_total_days,    # [Int] days of observed data + num. of days to forecast
+    cases,             # [AbstractVector{<:AbstractVector{<:Int}}] reported cases
+    deaths,            # [AbstractVector{<:AbstractVector{<:Int}}] reported deaths; rows indexed by i > N contain -1 and should be ignored
+    π,                 # [AbstractVector{<:AbstractVector{<:Real}}] h * s
+    covariates,        # [Vector{<:AbstractMatrix}]
+    epidemic_start,    # [AbstractVector{<:Int}]
+    population,        # [AbstractVector{<:Real}]
+    serial_intervals,  # [AbstractVector{<:Real}] fixed pre-calculated serial interval (SI) using empirical data from Neil
+    lockdown_index,    # [Int] the index for the `lockdown` covariate in `covariates`
+    predict=false,     # [Bool] if `false`, will only compute what's needed to `observe` but not more
+    ::Type{TV} = Vector{Float64}
+) where {TV}
+    <<jl:model-setup>>
+
+    # Latent variables
+    <<jl:priors>>
+
+    <<jl:inner-model-computation-function-based>>
+
+    # Observe
+    <<jl:observe-threaded>>
+
+    <<jl:model-return>>
 end;
 #+end_src
 
@@ -604,8 +645,8 @@ pyplot()
 # Ehh, this can be made nicer...
 function country_prediction_plot(country_idx, predictions_country::AbstractMatrix, e_deaths_country::AbstractMatrix, Rₜ_country::AbstractMatrix; normalize_pop::Bool = false)
     pop = data.population[country_idx]
-    num_total_days = length(data.deaths[country_idx])
-    num_observed_days = data.num_obs_countries[country_idx]
+    num_total_days = data.num_total_days
+    num_observed_days = length(data.cases[country_idx])
 
     country_name = countries[country_idx]
     start_date = first(country_to_dates[country_name])
@@ -615,14 +656,14 @@ function country_prediction_plot(country_idx, predictions_country::AbstractMatri
     # A tiny bit of preprocessing of the data
     preproc(x) = normalize_pop ? x ./ pop : x
 
-    daily_deaths = data.deaths[country_idx][1:num_observed_days]
-    daily_cases = data.cases[country_idx][1:num_observed_days]
+    daily_deaths = data.deaths[country_idx]
+    daily_cases = data.cases[country_idx]
     
     p1 = plot(; xaxis = false, legend = :topleft)
     bar!(preproc(daily_deaths), label="$(country_name)")
     title!("Observed daily deaths")
     vline!([data.epidemic_start[country_idx]], label="epidemic start", linewidth=2)
-    vline!([data.num_obs_countries[country_idx]], label="end of observations", linewidth=2)
+    vline!([num_observed_days], label="end of observations", linewidth=2)
     xlims!(0, num_total_days)
 
     p2 = plot(; legend = :topleft, xaxis=false)
@@ -823,133 +864,55 @@ country_prediction_plot(country_idx, daily_cases_posterior, daily_deaths_posteri
 
 #+CALL: plot-next-country-prior()
 
-#+RESULTS:
-[[file:./.ob-jupyter/beb81e270177e21ebb766d0fa8231378b8ee7573.png]]
-
 #+CALL: plot-next-country-posterior()
-
-#+RESULTS:
-[[file:./.ob-jupyter/183e66747789ca4a202669949f7b4688ca64c41d.png]]
 
 #+CALL: plot-next-country-prior()
 
-#+RESULTS:
-[[file:./.ob-jupyter/c7aa41858955654fbac9b290dbdcb82bf2a60d59.png]]
-
 #+CALL: plot-next-country-posterior()
-
-#+RESULTS:
-[[file:./.ob-jupyter/d992d6010b9d1fa061d7d51d6723c8af3b2fc53f.png]]
 
 #+CALL: plot-next-country-prior()
 
-#+RESULTS:
-[[file:./.ob-jupyter/5bc13a9fce6fefe520d95edf34352b875c1492ab.png]]
-
 #+CALL: plot-next-country-posterior()
-
-#+RESULTS:
-[[file:./.ob-jupyter/45e58ffb07a4f2edd3eebb81978c73065d792caf.png]]
 
 #+CALL: plot-next-country-prior()
 
-#+RESULTS:
-[[file:./.ob-jupyter/79be0bf8847567128a9578fa33c6107c51cb8965.png]]
-
 #+CALL: plot-next-country-posterior()
-
-#+RESULTS:
-[[file:./.ob-jupyter/2ae30d246b8cf7e9399aa352d7e5343501391eed.png]]
 
 #+CALL: plot-next-country-prior()
 
-#+RESULTS:
-[[file:./.ob-jupyter/637e0349137170b12c106b88354232b1e1da5898.png]]
-
 #+CALL: plot-next-country-posterior()
-
-#+RESULTS:
-[[file:./.ob-jupyter/958e68558a4f494df5343169e28fb30566396744.png]]
 
 #+CALL: plot-next-country-prior()
 
-#+RESULTS:
-[[file:./.ob-jupyter/0e34e13f858d8f688bf290f38fcefba1fd8a1117.png]]
-
 #+CALL: plot-next-country-posterior()
-
-#+RESULTS:
-[[file:./.ob-jupyter/66166539eb0d32aac0b8f2eaac86edf2a44a020b.png]]
 
 #+CALL: plot-next-country-prior()
 
-#+RESULTS:
-[[file:./.ob-jupyter/236156f940b233ddd9674852659bc93472be1dc0.png]]
-
 #+CALL: plot-next-country-posterior()
-
-#+RESULTS:
-[[file:./.ob-jupyter/2c5a30ccf2bf39781a59e0859076cbcaf7846f1c.png]]
 
 #+CALL: plot-next-country-prior()
 
-#+RESULTS:
-[[file:./.ob-jupyter/b46c0e9f57323545293727d264b58dbcdee8ee0e.png]]
-
 #+CALL: plot-next-country-posterior()
-
-#+RESULTS:
-[[file:./.ob-jupyter/5d780264daf52a4c4c64845bcd86e3621d7d439b.png]]
 
 #+CALL: plot-next-country-prior()
 
-#+RESULTS:
-[[file:./.ob-jupyter/f12d4ee99df4c2c600efd5c9e1a64525e8f440f4.png]]
-
 #+CALL: plot-next-country-posterior()
-
-#+RESULTS:
-[[file:./.ob-jupyter/1f4b3cdc9975e9cc6bc15aea7388e6371df0f3a6.png]]
 
 #+CALL: plot-next-country-prior()
 
-#+RESULTS:
-[[file:./.ob-jupyter/6013543f00429880b5e0800517c2b69b7856ff6b.png]]
-
 #+CALL: plot-next-country-posterior()
-
-#+RESULTS:
-[[file:./.ob-jupyter/fb52437b06c827b2814488929d9501a67302781f.png]]
 
 #+CALL: plot-next-country-prior()
 
-#+RESULTS:
-[[file:./.ob-jupyter/eddef8491616a7918a9e6fe80c3aa3a87eed4350.png]]
-
 #+CALL: plot-next-country-posterior()
-
-#+RESULTS:
-[[file:./.ob-jupyter/d1dbffad75a10e292b02f8b6e6d6dd12acb0134c.png]]
 
 #+CALL: plot-next-country-prior()
 
-#+RESULTS:
-[[file:./.ob-jupyter/567221d0e2729594f34f38829eac1197b44ee15d.png]]
-
 #+CALL: plot-next-country-posterior()
-
-#+RESULTS:
-[[file:./.ob-jupyter/35c58bdbce9ec344ac61a827682f622df402880b.png]]
 
 #+CALL: plot-next-country-prior()
 
-#+RESULTS:
-[[file:./.ob-jupyter/5833cc048ac9e4e6848f0afb5837bf6f6f77f5c1.png]]
-
 #+CALL: plot-next-country-posterior()
-
-#+RESULTS:
-[[file:./.ob-jupyter/327b03d1bdf15f5117fd5e80e6b59d38fc036e8c.png]]
 
 #+HTML: </div>
 
