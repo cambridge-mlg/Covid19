@@ -39,7 +39,7 @@ datadir(s...) = projectdir("data", "imperial-report13", s...)
 
 using RData
 
-rdata_full = load(datadir("processed_new.rds"))
+rdata_full = load(datadir("processed.rds"))
 rdata = rdata_full["stan_data"];
 
 keys(rdata_full)
@@ -385,147 +385,6 @@ parameters = (
 
 chains_posterior = sample(m_no_pred, NUTS(parameters.warmup, 0.95, 10), parameters.steps + parameters.warmup)
 
-using PyCall
-
-using PyCall: pyimport
-pystan = pyimport("pystan");
-
-model_str = raw"""
-data {
-  int <lower=1> M; // number of countries
-  int <lower=1> P; // number of covariates
-  int <lower=1> N0; // number of days for which to impute infections
-  int<lower=1> N[M]; // days of observed data for country m. each entry must be <= N2
-  int<lower=1> N2; // days of observed data + # of days to forecast
-  int cases[N2,M]; // reported cases
-  int deaths[N2, M]; // reported deaths -- the rows with i > N contain -1 and should be ignored
-  matrix[N2, M] f; // h * s
-  matrix[N2, P] X[M]; // features matrix
-  int EpidemicStart[M];
-  real pop[M];
-  real SI[N2]; // fixed pre-calculated SI using emprical data from Neil
-}
-
-transformed data {
-  vector[N2] SI_rev; // SI in reverse order
-  vector[N2] f_rev[M]; // f in reversed order
-  
-  for(i in 1:N2)
-    SI_rev[i] = SI[N2-i+1];
-    
-  for(m in 1:M){
-    for(i in 1:N2) {
-     f_rev[m, i] = f[N2-i+1,m];
-    }
-  }
-}
-
-
-parameters {
-  real<lower=0> mu[M]; // intercept for Rt
-  real<lower=0> alpha_hier[P]; // sudo parameter for the hier term for alpha
-  real<lower=0> gamma;
-  vector[M] lockdown;
-  real<lower=0> kappa;
-  real<lower=0> y[M];
-  real<lower=0> phi;
-  real<lower=0> tau;
-  real <lower=0> ifr_noise[M];
-}
-
-transformed parameters {
-    vector[P] alpha;
-    matrix[N2, M] prediction = rep_matrix(0,N2,M);
-    matrix[N2, M] E_deaths  = rep_matrix(0,N2,M);
-    matrix[N2, M] Rt = rep_matrix(0,N2,M);
-    matrix[N2, M] Rt_adj = Rt;
-    
-    {
-      matrix[N2,M] cumm_sum = rep_matrix(0,N2,M);
-      for(i in 1:P){
-        alpha[i] = alpha_hier[i] - ( log(1.05) / 6.0 );
-      }
-      for (m in 1:M){
-        prediction[1:N0,m] = rep_vector(y[m],N0); // learn the number of cases in the first N0 days
-        cumm_sum[2:N0,m] = cumulative_sum(prediction[2:N0,m]);
-        
-        Rt[,m] = mu[m] * exp(-X[m] * alpha - X[m][,5] * lockdown[m]);
-        Rt_adj[1:N0,m] = Rt[1:N0,m];
-        for (i in (N0+1):N2) {
-          real convolution = dot_product(sub_col(prediction, 1, m, i-1), tail(SI_rev, i-1));
-          cumm_sum[i,m] = cumm_sum[i-1,m] + prediction[i-1,m];
-          Rt_adj[i,m] = ((pop[m]-cumm_sum[i,m]) / pop[m]) * Rt[i,m];
-          prediction[i, m] = Rt_adj[i,m] * convolution;
-        }
-        E_deaths[1, m]= 1e-15 * prediction[1,m];
-        for (i in 2:N2){
-          E_deaths[i,m] = ifr_noise[m] * dot_product(sub_col(prediction, 1, m, i-1), tail(f_rev[m], i-1));
-        }
-      }
-    }
-}
-model {
-  tau ~ exponential(0.03);
-  for (m in 1:M){
-      y[m] ~ exponential(1/tau);
-  }
-  gamma ~ normal(0,.2);
-  lockdown ~ normal(0,gamma);
-  phi ~ normal(0,5);
-  kappa ~ normal(0,0.5);
-  mu ~ normal(3.28, kappa); // citation: https://academic.oup.com/jtm/article/27/2/taaa021/5735319
-  alpha_hier ~ gamma(.1667,1);
-  ifr_noise ~ normal(1,0.1);
-  for(m in 1:M){
-    deaths[EpidemicStart[m]:N[m], m] ~ neg_binomial_2(E_deaths[EpidemicStart[m]:N[m], m], phi);
-   }
-}
-
-generated quantities {
-    matrix[N2, M] prediction0 = rep_matrix(0,N2,M);
-    matrix[N2, M] E_deaths0  = rep_matrix(0,N2,M);
-    
-    {
-      matrix[N2,M] cumm_sum0 = rep_matrix(0,N2,M);
-      for (m in 1:M){
-         for (i in 2:N0){
-          cumm_sum0[i,m] = cumm_sum0[i-1,m] + y[m]; 
-        }
-        prediction0[1:N0,m] = rep_vector(y[m],N0); 
-        for (i in (N0+1):N2) {
-          real convolution0 = dot_product(sub_col(prediction0, 1, m, i-1), tail(SI_rev, i-1));
-          cumm_sum0[i,m] = cumm_sum0[i-1,m] + prediction0[i-1,m];
-          prediction0[i, m] = ((pop[m]-cumm_sum0[i,m]) / pop[m]) * mu[m] * convolution0;
-        }
-        E_deaths0[1, m]= 1e-15 * prediction0[1,m];
-        for (i in 2:N2){
-          E_deaths0[i,m] = ifr_noise[m] * dot_product(sub_col(prediction0, 1, m, i-1), tail(f_rev[m], i-1));
-        }
-      }
-    }
-}
-"""
-
-d = Dict([(k, rdata[k]) for k in keys(rdata)]); # `values(df)` and `keys(df)` have different ordering so DON'T do `Dict(keys(df), values(df))`
-
-sm = pystan.StanModel(model_code=model_str)
-
-fit_stan(n_iters=300, warmup=100) = sm.sampling(
-    data=d, iter=n_iters, chains=1, warmup=warmup, algorithm="NUTS", 
-    control=Dict(
-        "adapt_delta" => 0.95,
-        "max_treedepth" => 10
-    )
-)
-f = fit_stan(parameters.steps + parameters.warmup, parameters.warmup)
-
-la = f.extract(permuted=true)
-
-using Serialization
-
-stan_chain_fname = first([s for s in readdir(outdir()) if occursin("stan", s)])
-la = open(io -> deserialize(io), outdir(stan_chain_fname), "r")
-
 rename!(
     la,
     "alpha" => "α",
@@ -542,31 +401,6 @@ la_subset = Dict(
     k => la[k] for k in 
     ["y", "κ", "α_hier", "ϕ", "τ", "ifr_noise", "μ", "γ", "lockdown"]
 )
-
-function MCMCChains._cat(::Val{3}, c1::Chains, args::Chains...)
-    # check inputs
-    rng = range(c1)
-    # (OR not, he he he)
-    # all(c -> range(c) == rng, args) || throw(ArgumentError("chain ranges differ"))
-    nms = names(c1)
-    all(c -> names(c) == nms, args) || throw(ArgumentError("chain names differ"))
-
-    # concatenate all chains
-    data = mapreduce(c -> c.value.data, (x, y) -> cat(x, y; dims = 3), args;
-                     init = c1.value.data)
-    value = MCMCChains.AxisArray(data; iter = rng, var = nms, chain = 1:size(data, 3))
-
-    return Chains(value, missing, c1.name_map, c1.info)
-end
-
-stan_chain = Chains(la_subset); # <= results in all chains being concatenated together so we need to manually "separate" them
-
-steps_per_chain = parameters.steps
-num_chains = Int(length(stan_chain) // steps_per_chain)
-
-stan_chains = [stan_chain[1 + (i - 1) * steps_per_chain:i * steps_per_chain] for i = 1:num_chains];
-stan_chains = chainscat(stan_chains...);
-stan_chains = stan_chains[1:3:end] # thin
 
 filenames = [
     relpath(outdir(s)) for s in readdir(outdir())
