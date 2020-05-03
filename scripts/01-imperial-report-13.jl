@@ -1,6 +1,9 @@
 using DrWatson
 quickactivate(@__DIR__)
 
+using Pkg
+Pkg.instantiate()
+
 import DrWatson: datadir
 
 datadir() = projectdir("data", "imperial-report13")
@@ -35,15 +38,14 @@ parsed_args = parse_args(ARGS, argtable)
 # using Pkg
 # Pkg.build("PyCall")
 
+# Loading the project (https://github.com/TuringLang/Covid19)
 using Covid19
 
-using RData
-using Random, Turing, Bijectors
-
-Turing.setchunksize(parsed_args["chunksize"])
+# Some other packages we'll need
+using Random, Dates, Turing, Bijectors
 
 using Base.Threads
-@info "Using $(nthreads()) threads"
+nthreads()
 
 begin
     dist = product_distribution(fill(truncated(Normal(3.28, 10), 0, Inf), 14))
@@ -54,12 +56,28 @@ begin
     @assert (invlink(dist, b(x)) ≈ Turing.invlink(dist, b(x))) && (Turing.invlink(dist, b(x)) ≈ x)
 end
 
-@info "Loading and processing data $(datadir("processed.rds"))"
-rdata = load(datadir("processed.rds"));
+begin
+    @assert length(unique(rand(Turing.filldist(Gamma(.1667, 1), 6)))) > 1
+end
+
+using Pkg
+Pkg.status()
+
+import DrWatson: datadir
+
+datadir() = projectdir("data", "imperial-report13")
+datadir(s...) = projectdir("data", "imperial-report13", s...)
+
+using RData
+
+rdata_full = load(datadir("processed_new.rds"))
+rdata = rdata_full["stan_data"];
+
+keys(rdata_full)
+
+country_to_dates = d = Dict([(k, rdata_full["dates"][k]) for k in keys(rdata_full["dates"])])
 
 # Convert some misparsed fields
-# rdata["covariate4"] = Matrix(rdata["covariate4"]);
-
 rdata["N2"] = Int(rdata["N2"]);
 rdata["N0"] = Int(rdata["N0"]);
 
@@ -90,16 +108,9 @@ countries = (
 )
 num_countries = length(countries)
 
-# TODO: not sure if either of the below is the correct ordering of the names!
-# names_covariates = (
-#     "Schools + Universities",
-#     "Self-isolating if ill",
-#     "Public events",
-#     "Lockdown",
-#     "Social distancing encouraged"
-# )
 names_covariates = ("schools_universities", "self_isolating_if_ill", "public_events", "any", "lockdown", "social_distancing_encouraged")
 lockdown_index = findfirst(==("lockdown"), names_covariates)
+
 
 function rename!(d, names::Pair...)
     # check that keys are not yet present before updating `d`
@@ -112,7 +123,6 @@ function rename!(d, names::Pair...)
     end
     return d
 end
-
 
 # `rdata` is a `DictOfVector` so we convert to a simple `Dict` for simplicity
 d = Dict([(k, rdata[k]) for k in keys(rdata)]) # `values(df)` and `keys(df)` have different ordering so DON'T do `Dict(keys(df), values(df))`
@@ -153,24 +163,133 @@ data = merge(data, (covariates = covariates, ));
 
 data.num_countries
 
-model_def = ImperialReport13.model_v2_vectorized_multithreaded
+uk_index = findfirst(==("United_Kingdom"), countries)
+
+@model function model_v2(
+    num_impute,        # [Int] num. of days for which to impute infections
+    num_total_days,    # [Int] days of observed data + num. of days to forecast
+    cases,             # [AbstractVector{<:AbstractVector{<:Int}}] reported cases
+    deaths,            # [AbstractVector{<:AbstractVector{<:Int}}] reported deaths; rows indexed by i > N contain -1 and should be ignored
+    π,                 # [AbstractVector{<:AbstractVector{<:Real}}] h * s
+    covariates,        # [Vector{<:AbstractMatrix}]
+    epidemic_start,    # [AbstractVector{<:Int}]
+    population,        # [AbstractVector{<:Real}]
+    serial_intervals,  # [AbstractVector{<:Real}] fixed pre-calculated serial interval (SI) using empirical data from Neil
+    lockdown_index,    # [Int] the index for the `lockdown` covariate in `covariates`
+    predict=false,     # [Bool] if `false`, will only compute what's needed to `observe` but not more
+    ::Type{TV} = Vector{Float64}
+) where {TV}
+    # `covariates` should be of length `num_countries` and each entry correspond to a matrix of size `(num_total_days, num_covariates)`
+    num_covariates = size(covariates[1], 2)
+    num_countries = length(cases)
+    num_obs_countries = length.(cases)
+    
+    # If we don't want to predict the future, we only need to compute up-to time-step `num_obs_countries[m]`
+    last_time_steps = predict ? fill(num_total_days, num_countries) : num_obs_countries
+
+    # Latent variables
+    τ ~ Exponential(1 / 0.03) # `Exponential` has inverse parameterization of the one in Stan
+    y ~ filldist(Exponential(τ), num_countries)
+    ϕ ~ truncated(Normal(0, 5), 0, Inf)
+    κ ~ truncated(Normal(0, 0.5), 0, Inf)
+    μ ~ filldist(truncated(Normal(3.28, κ), 0, Inf), num_countries)
+    
+    α_hier ~ filldist(Gamma(.1667, 1), num_covariates)
+    α = α_hier .- log(1.05) / 6.
+    
+    ifr_noise ~ filldist(truncated(Normal(1., 0.1), 0, Inf), num_countries)
+    
+    # lockdown-related
+    γ ~ truncated(Normal(0, 0.2), 0, Inf)
+    lockdown ~ filldist(Normal(0, γ), num_countries)
+
+    # Initialization of some quantities
+    expected_daily_cases = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+    cases_pred = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+    expected_daily_deaths = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+    Rₜ = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+    Rₜ_adj = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+    
+    # Loops over countries and perform independent computations for each country
+    # since this model does not include any notion of migration across borders.
+    # => might has well wrap it in a `@threads` to perform the computation in parallel.
+    @threads for m = 1:num_countries
+        # country-specific parameters
+        πₘ = π[m]
+        pop_m = population[m]
+        expected_daily_cases_m = expected_daily_cases[m]
+        cases_pred_m = cases_pred[m]
+        expected_daily_deaths_m = expected_daily_deaths[m]
+        Rₜ_m = Rₜ[m]
+        Rₜ_adj_m = Rₜ_adj[m]
+        
+        last_time_step = last_time_steps[m]
+    
+        # Imputation of `num_impute` days
+        expected_daily_cases_m[1:num_impute] .= y[m]
+        cases_pred_m[1] = zero(cases_pred_m[1])
+        cases_pred_m[2:num_impute] .= cumsum(expected_daily_cases_m[1:num_impute - 1])
+        
+        xs = covariates[m][1:last_time_step, :] # extract covariates for the wanted time-steps and country `m`
+        Rₜ_m .= μ[m] * exp.(xs * (-α) + (- lockdown[m]) * xs[:, lockdown_index])
+    
+        # adjusts for portion of pop that are susceptible
+        Rₜ_adj_m[1:num_impute] .= (max.(pop_m .- cases_pred_m[1:num_impute], zero(cases_pred_m[1])) ./ pop_m) .* Rₜ_m[1:num_impute]
+    
+        for t = (num_impute + 1):last_time_step
+            cases_pred_m[t] = cases_pred_m[t - 1] + expected_daily_cases_m[t - 1]
+    
+            Rₜ_adj_m[t] = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
+            expected_daily_cases_m[t] = Rₜ_adj_m[t] * sum(expected_daily_cases_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1))
+        end
+    
+        expected_daily_deaths_m[1] = 1e-15 * expected_daily_cases_m[1]
+        for t = 2:last_time_step
+            expected_daily_deaths_m[t] = sum(expected_daily_cases_m[τ] * πₘ[t - τ] * ifr_noise[m] for τ = 1:(t - 1))
+        end
+    end
+
+    # Observe
+    # Doing observations in parallel provides a small speedup
+    logps = TV(undef, num_countries)
+    @threads for m = 1:num_countries
+        # Extract the estimated expected daily deaths for country `m`
+        expected_daily_deaths_m = expected_daily_deaths[m]
+        # Extract time-steps for which we have observations
+        ts = epidemic_start[m]:num_obs_countries[m]
+        # Observe!
+        logps[m] = logpdf(arraydist(NegativeBinomial2.(expected_daily_deaths_m[ts], ϕ)), deaths[m][ts])
+    end
+    Turing.acclogp!(_varinfo, sum(logps))
+
+    return (
+        expected_daily_cases = expected_daily_cases,
+        expected_daily_deaths = expected_daily_deaths,
+        Rₜ = Rₜ,
+        Rₜ_adjusted = Rₜ_adj
+    )
+end;
+
+model_def = model_v2;
 
 parameters = (
     warmup = parsed_args["num-warmup"],
     steps = parsed_args["num-samples"],
-    model = "imperial-report13-v2-vectorized-non-predict-$(nthreads())-threads",
+    model = "imperial-report13-v2-vectorized-non-predict-$(nthreads())-threads-updated-full-truncation",
     seed = parsed_args["seed"],
     with_lockdown = true
 )
 Random.seed!(parameters.seed);
 
+# STUFF
+cases = Array([data.cases[m][1:data.num_obs_countries[m]] for m = 1:data.num_countries])
+deaths = Array([data.deaths[m][1:data.num_obs_countries[m]] for m = 1:data.num_countries])
+
 m = model_def(
-    data.num_countries,
     data.num_impute,
-    data.num_obs_countries,
     data.num_total_days,
-    data.cases,
-    data.deaths,
+    cases,
+    deaths,
     data.π,
     data.covariates,
     data.epidemic_start,
