@@ -30,7 +30,7 @@ function _fix_stan_data_types!(d)
     d["P"] = Int(d["P"]) # `num_covariates`
     d["M"] = Int(d["M"]) # `num_countries`
     d["N0"] = Int(d["N0"]) # `num_impute`
-    d["N"] = Int(d["N"]) # `num_obs_countries`
+    d["N"] = Int.(d["N"]) # `num_obs_countries`
     d["N2"] = Int(d["N2"]) # `num_total_days`
 
     d["pop"] = Int.(d["pop"]) # `population`
