@@ -1,4 +1,4 @@
-using RData, ArgCheck
+using RData, ArgCheck, DrWatson
 
 struct Data
     stan_data
@@ -87,7 +87,7 @@ function load_data(path)
 
     d["deaths"] = collect(eachcol(d["deaths"])) # convert into Array of arrays instead of matrix
     d["cases"] = collect(eachcol(d["cases"])) # convert into Array of arrays instead of matrix
-    d["π"] = colllect(eachcol(d["π"]))  # convert into Array of arrays instead of matrix
+    d["π"] = collect(eachcol(d["π"]))  # convert into Array of arrays instead of matrix
 
     # Can deal with ragged arrays, so we can shave off unobserved data (future) which are just filled with -1
     num_obs_countries = d["num_obs_countries"]
