@@ -98,3 +98,21 @@ function vectup2tupvec(ts::AbstractVector{<:NamedTuple})
 
     return (; (k => [t[k] for t in ts] for k ∈ ks)...)
 end
+
+
+"""
+    rename!(d::Dict, names::Pair...)
+
+Renames the keys given by `names` of `d`.
+"""
+function rename!(d::Dict, names::Pair...)
+    # check that keys are not yet present before updating `d`
+    for k_new in values.(names)
+        @assert k_new ∉ keys(d) "$(k_new) already in dictionary"
+    end
+
+    for (k_old, k_new) in names
+        d[k_new] = pop!(d, k_old)
+    end
+    return d
+end
