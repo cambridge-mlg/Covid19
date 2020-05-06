@@ -91,8 +91,8 @@ function load_data(path)
 
     # Can deal with ragged arrays, so we can shave off unobserved data (future) which are just filled with -1
     num_obs_countries = d["num_obs_countries"]
-    d["cases"] = collect(d["cases"][1:num_obs_countries[m]] for m = 1:num_countries)
-    d["deaths"] = collect(d["deaths"][1:num_obs_countries[m]] for m = 1:num_countries)
+    d["cases"] = collect(d["cases"][m][1:num_obs_countries[m]] for m = 1:num_countries)
+    d["deaths"] = collect(d["deaths"][m][1:num_obs_countries[m]] for m = 1:num_countries)
 
     # Convert 3D array into Array{Matrix}
     covariates = [rdata["X"][m, :, :] for m = 1:num_countries]
