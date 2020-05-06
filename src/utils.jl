@@ -116,3 +116,18 @@ function rename!(d::Dict, names::Pair...)
     end
     return d
 end
+
+function arrarrarr2arr(a::AbstractVector{<:AbstractVector{<:AbstractVector{T}}}) where {T<:Real}
+    n1, n2, n3 = length(a), length(first(a)), length(first(first(a)))
+
+    A = zeros(T, (n1, n2, n3))
+    for i = 1:n1
+        for j = 1:n2
+            for k = 1:n3
+                A[i, j, k] = a[i][j][k]
+            end
+        end
+    end
+
+    return A
+end
