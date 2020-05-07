@@ -6,4 +6,6 @@ include("models.jl")
 include("data.jl")
 include("visualization.jl")
 
+const model = model_v2 # <= defines the "official" model for this sub-module
+
 end

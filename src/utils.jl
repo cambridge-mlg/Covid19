@@ -54,14 +54,14 @@ function GammaMeanCv(mean, cv)
 end
 
 """
-    generated_quantities(m::Turing.Model, c::Turing.MCMCChains.Chains)
+    generated_quantities(m::Turing.Model, c::MCMCChains.Chains)
 
 Executes `m` for each of the samples in `c` and returns an array of the values returned by the `m` for each sample.
 
 ## Examples
 Often you might have additional quantities computed inside the model that you want to inspect, e.g.
 ```julia
-@model demo(x) = begin
+@model function demo(x)
     # sample and observe
     θ ~ Prior()
     x ~ Likelihood()
@@ -76,11 +76,14 @@ chain = sample(m, alg, n)
 generated_quantities(m, chain)
 ```
 """
-function generated_quantities(m::Turing.Model, c::Turing.MCMCChains.Chains)
+function generated_quantities(m::Turing.Model, c::MCMCChains.Chains)
+    # if `c` is multiple chains we pool them into a single chain
+    chain = length(chains(c)) == 1 ? c : MCMCChains.pool_chain(chains_posterior)
+
     varinfo = Turing.DynamicPPL.VarInfo(m)
 
-    return map(1:length(c)) do i
-        Turing.DynamicPPL._setval!(varinfo, c[i])
+    return map(1:length(chain)) do i
+        Turing.DynamicPPL._setval!(varinfo, chain[i])
         m(varinfo)
     end
 end
