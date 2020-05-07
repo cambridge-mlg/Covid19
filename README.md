@@ -3,7 +3,7 @@
 This project will contain ongoing work for modelling related to the ongoing SARS-CoV-2 crisis.
 
 
-<a id="org0d28ee0"></a>
+<a id="orgd21b672"></a>
 
 # Getting started
 
@@ -40,16 +40,20 @@ The package is structed such that we have dedicated sub-modules within the packa
 In addition, for certain files (in particular some of the larger files, e.g. most of the files in the `out/` folder) you'll need [git-lfs](https://git-lfs.github.com/) to download.
 
 
-## `Covid19.ImperialReport13`
+# `Covid19.ImperialReport13`
 
 This submodules focuses on replicating and possibly extending the work over at <https://github.com/ImperialCollegeLondon/covid19model/> using [`Turing.jl`](https://turing.ml/dev/). Therefore, for a detailed description of the model implemented in addition to analysis of both the model and the resulting inference we refer to their repository and the related paper.
 
+This section gives you a quick overview of how to get up and running with this particular model. You can find a more detailed walk-through of the process in [notebooks/03-Imperial-Report13-analysis.md](./notebooks/03-Imperial-Report13-analysis.md).
 
-### How to run
 
-Assuming you've taken the steps in the ["Getting started" section](#org0d28ee0) above, you can load the processed data related to this submodule by running
+## How to run
+
+Assuming you've taken the steps in the ["Getting started" section](#orgd21b672) above, you can load the processed data related to this submodule by running
 
 ```julia
+using DrWatson
+
 data = ImperialReport13.load_data(datadir("imperial-report13", "processed.rds"));
 ```
 
@@ -115,7 +119,7 @@ m_no_pred = ImperialReport13.model(
 ```
 
 
-#### Inference
+### Inference
 
 To perform inference for the model we would simply run the code below:
 
@@ -147,7 +151,7 @@ chains_posterior = chains_posterior[1:3:end]; # <= Thin so we're left with 1000 
 ```
 
 
-#### Predictive posterior
+### Predictive posterior
 
 Now, since we want to look at predictions, we simply re-instantiate the model with the `predict` argument set to `true`:
 
