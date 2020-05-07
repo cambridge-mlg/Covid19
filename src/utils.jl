@@ -73,7 +73,7 @@ m = demo(data)
 chain = sample(m, alg, n)
 
 # To inspect the `interesting_quantity(θ, x)` where `θ` is replaced by samples from the posterior/`chain`:
-generated_quantities(m, chain)
+generated_quantities(m, chain) # <= results in a `Vector` of returned values from `interesting_quantity(θ, x)`
 ```
 """
 function generated_quantities(m::Turing.Model, c::MCMCChains.Chains)
