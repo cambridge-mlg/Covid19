@@ -1051,11 +1051,9 @@ version = "0.3.8"
 
 [[Turing]]
 deps = ["AbstractMCMC", "AdvancedHMC", "AdvancedMH", "Bijectors", "Distributions", "DistributionsAD", "DocStringExtensions", "DynamicPPL", "EllipticalSliceSampling", "ForwardDiff", "Libtask", "LinearAlgebra", "LogDensityProblems", "MCMCChains", "ProgressLogging", "Random", "Reexport", "Requires", "SpecialFunctions", "Statistics", "StatsBase", "StatsFuns", "Tracker"]
-git-tree-sha1 = "2939a5a7de0eaaad5078d2a4d465aecbe1e264a2"
-repo-rev = "master"
-repo-url = "https://github.com/TuringLang/Turing.jl.git"
+git-tree-sha1 = "52d1be03c8aeec60c19458482be8341c67fa4889"
 uuid = "fce5fe82-541a-59a6-adf8-730c64b5f9a0"
-version = "0.11.0"
+version = "0.12.0"
 
 [[URIParser]]
 deps = ["Unicode"]
