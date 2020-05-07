@@ -601,21 +601,18 @@ end
 
     # Observe
     # Doing observations in parallel provides a small speedup
-    logps = TV(undef, num_countries)
     @threads for m = 1:num_countries
         # Extract the estimated expected daily deaths for country `m`
         expected_daily_deaths_m = expected_daily_deaths[m]
         # Extract time-steps for which we have observations
         ts = epidemic_start[m]:num_obs_countries[m]
         # Observe!
-        logps[m] = logpdf(arraydist(NegativeBinomial2.(expected_daily_deaths_m[ts], ϕ)), deaths[m][ts])
+        deaths[m][ts] ~ arraydist(NegativeBinomial2.(expected_daily_deaths_m[ts], ϕ))
     end
-    Turing.acclogp!(_varinfo, sum(logps))
-
     return (
         expected_daily_cases = expected_daily_cases,
         expected_daily_deaths = expected_daily_deaths,
         Rt = Rt,
         Rt_adjusted = Rt_adj
     )
-end;
+end

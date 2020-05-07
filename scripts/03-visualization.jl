@@ -180,44 +180,45 @@ uk_index = findfirst(==("United_Kingdom"), countries)
     expected_daily_cases = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
     cases_pred = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
     expected_daily_deaths = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-    Rₜ = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
-    Rₜ_adj = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+    Rt = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
+    Rt_adj = TV[TV(undef, last_time_steps[m]) for m in 1:num_countries]
     
     # Loops over countries and perform independent computations for each country
     # since this model does not include any notion of migration across borders.
     # => might has well wrap it in a `@threads` to perform the computation in parallel.
     @threads for m = 1:num_countries
         # country-specific parameters
-        πₘ = π[m]
+        π_m = π[m]
         pop_m = population[m]
         expected_daily_cases_m = expected_daily_cases[m]
         cases_pred_m = cases_pred[m]
         expected_daily_deaths_m = expected_daily_deaths[m]
-        Rₜ_m = Rₜ[m]
-        Rₜ_adj_m = Rₜ_adj[m]
+        Rt_m = Rt[m]
+        Rt_adj_m = Rt_adj[m]
         
         last_time_step = last_time_steps[m]
     
         # Imputation of `num_impute` days
         expected_daily_cases_m[1:num_impute] .= y[m]
-        cases_pred_m[1:num_impute] .= cumsum(expected_daily_cases_m[1:num_impute])
+        cases_pred_m[1] = zero(cases_pred_m[1])
+        cases_pred_m[2:num_impute] .= cumsum(expected_daily_cases_m[1:num_impute - 1])
         
         xs = covariates[m][1:last_time_step, :] # extract covariates for the wanted time-steps and country `m`
-        Rₜ_m .= μ[m] * exp.(xs * (-α) + (- lockdown[m]) * xs[:, lockdown_index])
+        Rt_m .= μ[m] * exp.(xs * (-α) + (- lockdown[m]) * xs[:, lockdown_index])
     
         # adjusts for portion of pop that are susceptible
-        Rₜ_adj_m[1:num_impute] .= (max.(pop_m .- cases_pred_m[1:num_impute], zero(cases_pred_m[1])) ./ pop_m) .* Rₜ_m[1:num_impute]
+        Rt_adj_m[1:num_impute] .= (max.(pop_m .- cases_pred_m[1:num_impute], zero(cases_pred_m[1])) ./ pop_m) .* Rt_m[1:num_impute]
     
         for t = (num_impute + 1):last_time_step
             cases_pred_m[t] = cases_pred_m[t - 1] + expected_daily_cases_m[t - 1]
     
-            Rₜ_adj_m[t] = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rₜ_m[t] # adjusts for portion of pop that are susceptible
-            expected_daily_cases_m[t] = Rₜ_adj_m[t] * sum(expected_daily_cases_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1))
+            Rt_adj_m[t] = (max(pop_m - cases_pred_m[t], zero(cases_pred_m[t])) / pop_m) * Rt_m[t] # adjusts for portion of pop that are susceptible
+            expected_daily_cases_m[t] = Rt_adj_m[t] * sum(expected_daily_cases_m[τ] * serial_intervals[t - τ] for τ = 1:(t - 1))
         end
     
         expected_daily_deaths_m[1] = 1e-15 * expected_daily_cases_m[1]
         for t = 2:last_time_step
-            expected_daily_deaths_m[t] = sum(expected_daily_cases_m[τ] * πₘ[t - τ] * ifr_noise[m] for τ = 1:(t - 1))
+            expected_daily_deaths_m[t] = sum(expected_daily_cases_m[τ] * π_m[t - τ] * ifr_noise[m] for τ = 1:(t - 1))
         end
     end
 
@@ -237,8 +238,8 @@ uk_index = findfirst(==("United_Kingdom"), countries)
     return (
         expected_daily_cases = expected_daily_cases,
         expected_daily_deaths = expected_daily_deaths,
-        Rₜ = Rₜ,
-        Rₜ_adjusted = Rₜ_adj
+        Rt = Rt,
+        Rt_adjusted = Rt_adj
     )
 end;
 
@@ -281,7 +282,7 @@ using Plots, StatsPlots
 pyplot()
 
 # Ehh, this can be made nicer...
-function country_prediction_plot(country_idx, predictions_country::AbstractMatrix, e_deaths_country::AbstractMatrix, Rₜ_country::AbstractMatrix; normalize_pop::Bool = false)
+function country_prediction_plot(country_idx, predictions_country::AbstractMatrix, e_deaths_country::AbstractMatrix, Rt_country::AbstractMatrix; normalize_pop::Bool = false)
     pop = data.population[country_idx]
     num_total_days = data.num_total_days
     num_observed_days = length(data.cases[country_idx])
@@ -310,7 +311,7 @@ function country_prediction_plot(country_idx, predictions_country::AbstractMatri
     bar!(preproc(daily_deaths), label="$(country_name) (observed)", alpha=0.5)
 
     p3 = plot(; legend = :bottomleft, xaxis=false)
-    plot_confidence_timeseries!(p3, Rₜ_country; no_label = true)
+    plot_confidence_timeseries!(p3, Rt_country; no_label = true)
     for (c_idx, c_time) in enumerate(findfirst.(==(1), eachcol(data.covariates[country_idx])))
         if c_time !== nothing
             # c_name = names(covariates)[2:end][c_idx]
@@ -321,8 +322,8 @@ function country_prediction_plot(country_idx, predictions_country::AbstractMatri
             end
         end
     end
-    title!("Rₜ")
-    qs = [quantile(v, [0.025, 0.975]) for v in eachrow(Rₜ_country)]
+    title!("Rt")
+    qs = [quantile(v, [0.025, 0.975]) for v in eachrow(Rt_country)]
     lq, hq = (eachrow(hcat(qs...))..., )
     ylims!(0, maximum(hq) + 0.1)
 
@@ -337,13 +338,13 @@ function country_prediction_plot(country_idx, predictions_country::AbstractMatri
     vals = preproc(cumsum(e_deaths_country; dims = 1))
     p5 = plot(; legend = :topleft, xaxis=false)
     plot_confidence_timeseries!(p5, vals; label = "$(country_name)")
-    plot!(preproc(cumsum(daily_deaths)), label="observed", color=:red)
+    plot!(preproc(cumsum(daily_deaths)), label="observed/recorded", color=:red)
     title!("Expected deaths (pred)")
 
     vals = preproc(cumsum(predictions_country; dims = 1))
     p6 = plot(; legend = :topleft)
     plot_confidence_timeseries!(p6, vals; label = "$(country_name)")
-    plot!(preproc(daily_cases), label="observed", color=:red)
+    plot!(preproc(daily_cases), label="observed/recorded", color=:red)
     title!("Expected cases (pred)")
 
     p = plot(p1, p3, p2, p4, p5, p6, layout=(6, 1), size=(900, 1200), sharex=true)
@@ -352,13 +353,13 @@ function country_prediction_plot(country_idx, predictions_country::AbstractMatri
     return p
 end
                                         
-function country_prediction_plot(country_idx, cases, e_deaths, Rₜ; kwargs...)
+function country_prediction_plot(country_idx, cases, e_deaths, Rt; kwargs...)
     n = length(cases)
     e_deaths_country = hcat([e_deaths[t][country_idx] for t = 1:n]...)
-    Rₜ_country = hcat([Rₜ[t][country_idx] for t = 1:n]...)
+    Rt_country = hcat([Rt[t][country_idx] for t = 1:n]...)
     predictions_country = hcat([cases[t][country_idx] for t = 1:n]...)
 
-    return country_prediction_plot(country_idx, predictions_country, e_deaths_country, Rₜ_country; kwargs...)
+    return country_prediction_plot(country_idx, predictions_country, e_deaths_country, Rt_country; kwargs...)
 end
 
 chain_prior = sample(m, Turing.Inference.PriorSampler(), 1_000);
@@ -367,11 +368,11 @@ plot(chain_prior[[:ϕ, :τ, :κ]]; α = .5, linewidth=1.5)
 
 # Compute the "generated quantities" for the PRIOR
 generated_prior = vectup2tupvec(generated_quantities(m, chain_prior));
-daily_cases_prior, daily_deaths_prior, Rₜ_prior, Rₜ_adj_prior = generated_prior;
+daily_cases_prior, daily_deaths_prior, Rt_prior, Rt_adj_prior = generated_prior;
 
-country_prediction_plot(uk_index, daily_cases_prior, daily_deaths_prior, Rₜ_prior)
+country_prediction_plot(uk_index, daily_cases_prior, daily_deaths_prior, Rt_prior)
 
-country_prediction_plot(uk_index, daily_cases_prior, daily_deaths_prior, Rₜ_adj_prior)
+country_prediction_plot(uk_index, daily_cases_prior, daily_deaths_prior, Rt_adj_prior)
 
 data.population[uk_index]
 
@@ -383,7 +384,7 @@ parameters = (
 chains_posterior = sample(m_no_pred, NUTS(parameters.warmup, 0.95, 10), parameters.steps + parameters.warmup)
 
 filenames = [
-    projectdir("out", s) for s in readdir(projectdir("out"))
+    relpath(projectdir("out", s)) for s in readdir(projectdir("out"))
     if occursin(savename(parameters), s) && occursin("seed", s)
 ]
 length(filenames)
@@ -392,27 +393,24 @@ chains_posterior_vec = [read(fname, Chains) for fname in filenames]; # read the 
 chains_posterior = chainscat(chains_posterior_vec...); # concatenate them
 chains_posterior = chains_posterior[1:3:end] # <= thin so we're left with 1000 samples
 
-# rename some variables to make the chain compatible with new model where we've changed a variable name from μ₀ → μ
-chains_posterior = set_names(chains_posterior, Dict{String, String}(["μ₀[$i]" => "μ[$i]" for i = 1:length(names(chains_posterior[:μ₀]))]))
-
 plot(chains_posterior[[:κ, :ϕ, :τ]]; α = .5, linewidth=1.5)
 
 # Compute generated quantities for the chains pooled together
 pooled_chains = MCMCChains.pool_chain(chains_posterior)
 generated_posterior = vectup2tupvec(generated_quantities(m, pooled_chains));
 
-daily_cases_posterior, daily_deaths_posterior, Rₜ_posterior, Rₜ_adj_posterior = generated_posterior;
+daily_cases_posterior, daily_deaths_posterior, Rt_posterior, Rt_adj_posterior = generated_posterior;
 
-country_prediction_plot(uk_index, daily_cases_posterior, daily_deaths_posterior, Rₜ_posterior)
+country_prediction_plot(uk_index, daily_cases_posterior, daily_deaths_posterior, Rt_posterior)
 
-country_prediction_plot(uk_index, daily_cases_posterior, daily_deaths_posterior, Rₜ_adj_posterior)
+country_prediction_plot(uk_index, daily_cases_posterior, daily_deaths_posterior, Rt_adj_posterior)
 
 country_idx = 0
 
 country_idx += 1
-country_prediction_plot(country_idx, daily_cases_prior, daily_deaths_prior, Rₜ_adj_prior)
+country_prediction_plot(country_idx, daily_cases_prior, daily_deaths_prior, Rt_adj_prior)
 
-country_prediction_plot(country_idx, daily_cases_posterior, daily_deaths_posterior, Rₜ_adj_posterior)
+country_prediction_plot(country_idx, daily_cases_posterior, daily_deaths_posterior, Rt_adj_posterior)
 
 # Get the index of schools and univerities closing
 schools_universities_closed_index = findfirst(==("schools_universities"), names_covariates)
@@ -461,8 +459,8 @@ m_counterfactual = model_def(
 
 # Compute the "generated quantities" for the "counter-factual" model
 generated_counterfactual = vectup2tupvec(generated_quantities(m_counterfactual, pooled_chains));
-daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_counterfactual, Rₜ_adj_counterfactual = generated_counterfactual;
-country_prediction_plot(5, daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_adj_counterfactual; normalize_pop = true)
+daily_cases_counterfactual, daily_deaths_counterfactual, Rt_counterfactual, Rt_adj_counterfactual = generated_counterfactual;
+country_prediction_plot(5, daily_cases_counterfactual, daily_deaths_counterfactual, Rt_adj_counterfactual; normalize_pop = true)
 
 # What happens if we never close schools nor do a lockdown?
 m_counterfactual = model_def(
@@ -481,8 +479,8 @@ m_counterfactual = model_def(
 
 # Compute the "generated quantities" for the "counter-factual" model
 generated_counterfactual = vectup2tupvec(generated_quantities(m_counterfactual, pooled_chains));
-daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_counterfactual, Rₜ_adj_counterfactual = generated_counterfactual;
-country_prediction_plot(uk_index, daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_adj_counterfactual; normalize_pop = true)
+daily_cases_counterfactual, daily_deaths_counterfactual, Rt_counterfactual, Rt_adj_counterfactual = generated_counterfactual;
+country_prediction_plot(uk_index, daily_cases_counterfactual, daily_deaths_counterfactual, Rt_adj_counterfactual; normalize_pop = true)
 
 lift_lockdown_time = 75
 
@@ -508,5 +506,5 @@ m_counterfactual = model_def(
 
 # Compute the "generated quantities" for the "counter-factual" model
 generated_counterfactual = vectup2tupvec(generated_quantities(m_counterfactual, pooled_chains));
-daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_counterfactual, Rₜ_adj_counterfactual = generated_counterfactual;
-country_prediction_plot(uk_index, daily_cases_counterfactual, daily_deaths_counterfactual, Rₜ_adj_counterfactual; normalize_pop = true)
+daily_cases_counterfactual, daily_deaths_counterfactual, Rt_counterfactual, Rt_adj_counterfactual = generated_counterfactual;
+country_prediction_plot(uk_index, daily_cases_counterfactual, daily_deaths_counterfactual, Rt_adj_counterfactual; normalize_pop = true)

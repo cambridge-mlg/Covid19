@@ -54,14 +54,14 @@ function GammaMeanCv(mean, cv)
 end
 
 """
-    generated_quantities(m::Turing.Model, c::Turing.MCMCChains.Chains)
+    generated_quantities(m::Turing.Model, c::MCMCChains.Chains)
 
 Executes `m` for each of the samples in `c` and returns an array of the values returned by the `m` for each sample.
 
 ## Examples
 Often you might have additional quantities computed inside the model that you want to inspect, e.g.
 ```julia
-@model demo(x) = begin
+@model function demo(x)
     # sample and observe
     θ ~ Prior()
     x ~ Likelihood()
@@ -73,14 +73,17 @@ m = demo(data)
 chain = sample(m, alg, n)
 
 # To inspect the `interesting_quantity(θ, x)` where `θ` is replaced by samples from the posterior/`chain`:
-generated_quantities(m, chain)
+generated_quantities(m, chain) # <= results in a `Vector` of returned values from `interesting_quantity(θ, x)`
 ```
 """
-function generated_quantities(m::Turing.Model, c::Turing.MCMCChains.Chains)
+function generated_quantities(m::Turing.Model, c::MCMCChains.Chains)
+    # if `c` is multiple chains we pool them into a single chain
+    chain = length(chains(c)) == 1 ? c : MCMCChains.pool_chain(chains_posterior)
+
     varinfo = Turing.DynamicPPL.VarInfo(m)
 
-    return map(1:length(c)) do i
-        Turing.DynamicPPL._setval!(varinfo, c[i])
+    return map(1:length(chain)) do i
+        Turing.DynamicPPL._setval!(varinfo, chain[i])
         m(varinfo)
     end
 end
@@ -97,4 +100,37 @@ function vectup2tupvec(ts::AbstractVector{<:NamedTuple})
     ks = keys(first(ts))
 
     return (; (k => [t[k] for t in ts] for k ∈ ks)...)
+end
+
+
+"""
+    rename!(d::Dict, names::Pair...)
+
+Renames the keys given by `names` of `d`.
+"""
+function rename!(d::Dict, names::Pair...)
+    # check that keys are not yet present before updating `d`
+    for k_new in values.(names)
+        @assert k_new ∉ keys(d) "$(k_new) already in dictionary"
+    end
+
+    for (k_old, k_new) in names
+        d[k_new] = pop!(d, k_old)
+    end
+    return d
+end
+
+function arrarrarr2arr(a::AbstractVector{<:AbstractVector{<:AbstractVector{T}}}) where {T<:Real}
+    n1, n2, n3 = length(a), length(first(a)), length(first(first(a)))
+
+    A = zeros(T, (n1, n2, n3))
+    for i = 1:n1
+        for j = 1:n2
+            for k = 1:n3
+                A[i, j, k] = a[i][j][k]
+            end
+        end
+    end
+
+    return A
 end
