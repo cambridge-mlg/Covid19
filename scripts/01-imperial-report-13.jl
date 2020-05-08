@@ -1,12 +1,8 @@
-using DrWatson
-quickactivate(@__DIR__)
-
-using Pkg
-Pkg.instantiate()
-
 using ArgParse
 
-argtable = ArgParseSettings()
+argtable = ArgParseSettings(
+    description="This script samples from ImperialReport13.model using NUTS."
+)
 @add_arg_table! argtable begin
     "--chunksize"
         help = "chunksize to be used by ForwardDiff.jl"
@@ -28,22 +24,14 @@ end
 
 parsed_args = parse_args(ARGS, argtable)
 
-# ENV["PYTHON"] = "$(ENV['HOME'])/.local/bin/python"
-
-# using Pkg
-# Pkg.build("PyCall")
-
 # Loading the project (https://github.com/TuringLang/Covid19)
 using Covid19
 
 # Some other packages we'll need
-using Random, Dates, Turing, Bijectors
+using Random, Dates, Turing, Bijectors, DrWatson
 
 using Base.Threads
 nthreads()
-
-using Pkg
-Pkg.status()
 
 data = ImperialReport13.load_data(datadir("imperial-report13", "processed.rds"))
 
@@ -52,12 +40,11 @@ num_countries = length(countries)
 covariate_names = data.covariate_names
 lockdown_index = findfirst(==("lockdown"), covariate_names)
 
-model_def = ImperialReport13.model_v2;
+model_def = ImperialReport13.model;
 
 parameters = (
     warmup = parsed_args["num-warmup"],
     steps = parsed_args["num-samples"],
-    model = "new",
     seed = parsed_args["seed"],
 )
 Random.seed!(parameters.seed);
