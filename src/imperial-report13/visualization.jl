@@ -1,7 +1,6 @@
 using Plots, StatsPlots, LaTeXStrings, Dates
 
-# Need some of the impls from this
-include("../visualization.jl")
+using ..Covid19: plot_confidence_timeseries!
 
 
 # Ehh, this can be made nicer...

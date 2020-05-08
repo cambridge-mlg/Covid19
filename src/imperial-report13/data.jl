@@ -1,5 +1,7 @@
 using RData, ArgCheck, DrWatson
 
+using ..Covid19: rename!
+
 struct Data
     stan_data
     turing_data

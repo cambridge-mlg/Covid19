@@ -1,7 +1,8 @@
 module ImperialReport13
 using Turing, Distributions, StatsBase, ArgCheck
 
-include("../utils.jl")
+using ..Covid19: NegativeBinomial2
+
 include("models.jl")
 include("data.jl")
 include("visualization.jl")
