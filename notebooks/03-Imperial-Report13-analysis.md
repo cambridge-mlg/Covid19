@@ -13,6 +13,9 @@ In the project we use [`DrWatson.jl`](https://github.com/JuliaDynamics/DrWatson.
 
 ```julia
 using DrWatson
+```
+
+```julia
 quickactivate(@__DIR__)
 ```
 
@@ -368,7 +371,7 @@ You can read more about the `@macro` and its internals [here](https://turing.ml/
 We define an alias `model_def` so that if we want to try out a different model, there's only one point in the notebook which we need to change.
 
 ```julia
-model_def = ImperialReport13.model_v2;
+model_def = ImperialReport13.model;
 ```
 
 The input data have up to 30-40 days of unobserved future data which we might want to predict on. But during sampling we don't want to waste computation on sampling for the future for which we do not have any observations. Therefore we have an argument `predict::Bool` in the model which allows us to specify whether or not to generate future quantities.
@@ -420,7 +423,7 @@ res.expected_daily_cases[uk_index]
 For visualisation we of course use [Plots.jl](https://github.com/JuliaPlots/Plots.jl), and in this case we're going to use the `pyplot` backend which uses Python's matplotlib under the hood.
 
 ```julia
-chain_prior = sample(m, Turing.Inference.Prior(), 3_000);
+chain_prior = sample(m, Turing.Inference.Prior(), 4_000);
 ```
 
 ```julia

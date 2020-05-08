@@ -2,7 +2,7 @@
 #+OPTIONS: toc:nil num:nil tex:mathjax date:t
 
 #+PROPERTY: header-args: :eval never-export
-#+PROPERTY: header-args:julia :eval never-export :exports both :tangle ~/Projects/mine/Covid19/scripts/03-visualization.jl :kernel julia-4-threads-1.4 :session /ssh:turing:/var/home/tef30/.local/share/jupyter/runtime/kernel-44c0c79f-8f34-413d-ad7d-8310619b11dc.json
+#+PROPERTY: header-args:julia :eval never-export :exports both :tangle ~/Projects/mine/Covid19/scripts/03-visualization.jl :kernel julia-4-threads-1.4 :session /ssh:turing:/var/home/tef30/.local/share/jupyter/runtime/kernel-2e60a608-1d20-4a24-ae26-5edff12647ea.json
 
 #+HTML_HEAD: <link rel="stylesheet" type="text/css" href="/home/tor/org-blog/assets/css/main.css"/>
 #+HTML_HEAD: <style>body { width: 60%; margin: 0 auto; } div.figure > p > img { max-height: 700px; }  </style>
@@ -95,6 +95,12 @@
 (setq jupyter--debug nil)
 #+end_src
 
+#+begin_src julia :exports none :results none
+#########################################################################
+# This file is tangled from notebooks/03-Imperial-Report13-analysis.org #
+#########################################################################
+#+end_src
+
 #+begin_src julia :exports none :results none :tangle no
 # just to make sure we're in the correct directory
 _home = ENV["HOME"]
@@ -118,10 +124,13 @@ In the project we use [[https://github.com/JuliaDynamics/DrWatson.jl][=DrWatson.
 
 #+begin_src julia :results none :exports code
 using DrWatson
+#+end_src
+
+#+begin_src julia :tangle no :exports code
 quickactivate(@__DIR__)
 #+end_src
 
-#+begin_src julia :exports none
+#+begin_src julia :exports none :tangle no
 using Pkg
 Pkg.instantiate()
 #+end_src
@@ -145,28 +154,10 @@ using Base.Threads
 nthreads()
 #+end_src
 
-#+begin_src julia :exports none
-begin
-    dist = product_distribution(fill(truncated(Normal(3.28, 10), 0, Inf), 14))
-    b = bijector(dist)
-    x = rand(dist)
-
-    # stupid check to make sure that we have the correct versions of Bijectors.jl used WITHIN Turing.jl
-    @assert (invlink(dist, b(x)) ≈ Turing.invlink(dist, b(x))) && (Turing.invlink(dist, b(x)) ≈ x)
-end
-#+end_src
-
-#+begin_src julia :exports none
-begin
-    @assert length(unique(rand(Turing.filldist(Gamma(.1667, 1), 6)))) > 1
-end
-#+end_src
-
-#+begin_src julia :exports none
+#+begin_src julia :exports none :tangle no
 using Pkg
 Pkg.status()
 #+end_src
-
 
 In the Github project you will find a =Manifest.toml=. This means that if you're working directory is the project directory, and you do =julia --project= followed by =] instantiate= you will have /exactly/ the same enviroment as we had when performing this analysis.
 
@@ -534,7 +525,7 @@ You can read more about the =@macro= and its internals [[https://turing.ml/dev/d
 #+JEKYLL: {% enddetails %}
 #+MARKDOWN_GITHUB: </details>
 
-#+begin_src julia :noweb yes :exports none
+#+begin_src julia :noweb yes :exports none :tangle no
 @model function model_v2(
     num_impute,        # [Int] num. of days for which to impute infections
     num_total_days,    # [Int] days of observed data + num. of days to forecast
@@ -599,7 +590,7 @@ end;
 We define an alias =model_def= so that if we want to try out a different model, there's only one point in the notebook which we need to change.
 
 #+begin_src julia
-model_def = ImperialReport13.model_v2;
+model_def = ImperialReport13.model;
 #+end_src
 
 The input data have up to 30-40 days of unobserved future data which we might want to predict on. But during sampling we don't want to waste computation on sampling for the future for which we do not have any observations. Therefore we have an argument =predict::Bool= in the model which allows us to specify whether or not to generate future quantities.
@@ -649,7 +640,7 @@ res.expected_daily_cases[uk_index]
 For visualisation we of course use [[https://github.com/JuliaPlots/Plots.jl][Plots.jl]], and in this case we're going to use the =pyplot= backend which uses Python's matplotlib under the hood.
 
 #+begin_src julia
-chain_prior = sample(m, Turing.Inference.Prior(), 3_000);
+chain_prior = sample(m, Turing.Inference.Prior(), 4_000);
 #+end_src
 
 #+begin_src julia
@@ -661,6 +652,7 @@ For the most part we will use the =PyPlot.jl= (which uses Python's =matplotlib= 
 #+begin_src julia
 pyplot()
 #+end_src
+
 * Prior
 Before we do any inference it can be useful to inspect the /prior/ distribution, in particular if you are working with a hierarchical model where the dependencies in the prior might lead to some unexpected behavior. In Turing.jl you can sample a chain from the prior using =sample=, much in the same way as you would sample from the posterior.
 
@@ -886,7 +878,7 @@ la = f.extract(permuted=true)
 
 Or, if you've done this before and saved the results using =Serialization.jl=, you can load the results:
 
-#+begin_src julia :tangle no
+#+begin_src julia
 using Serialization
 
 stan_chain_fname = first([s for s in readdir(outdir()) if occursin("stan", s)])
