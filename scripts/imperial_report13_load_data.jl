@@ -1,3 +1,11 @@
+##############################################################################
+#                              !!!DEPRECATED!!!                              #
+#                                                                            #
+# Now we instead use the `base.r` from                                       #
+# https://github.com/ImperialCollegeLondon/covid19model/ to generate inputs. #
+##############################################################################
+
+
 #################################
 # Loading and transforming data #
 #################################
