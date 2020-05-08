@@ -9,3 +9,11 @@ using Test, Covid19
     @test var(dist) ≈ μ + μ^2 / ϕ
 end
 
+@testset "GammaMeanCv" begin
+    μ = 1.
+    cv = √2
+    dist = GammaMeanCv(μ, cv)
+
+    @test mean(dist) ≈ μ
+    @test var(dist) ≈ cv^2
+end
