@@ -3,7 +3,7 @@
 This project will contain ongoing work for modelling related to the ongoing SARS-CoV-2 crisis.
 
 
-<a id="orgd21b672"></a>
+<a id="org1e4e745"></a>
 
 # How to run
 
@@ -24,11 +24,6 @@ quickactivate(@__DIR__)
 
 Then to ensure that you have the correct dependencies installed, once you're inside the Julia REPL you can do
 
-```julia
-using Pkg
-Pkg.instantiate()
-```
-
 This will download and install the required packages. Once that is finished, you can import `Covid19`:
 
 ```julia
@@ -46,10 +41,12 @@ This submodules focuses on replicating and possibly extending the work over at <
 
 This section gives you a quick overview of how to get up and running with this particular model. You can find a more detailed walk-through of the process in [notebooks/03-Imperial-Report13-analysis.md](./notebooks/03-Imperial-Report13-analysis.md).
 
+Alternatively, to sample from the model with preset parameters, you can run the `scripts/01-imperial-report13.jl` script.
+
 
 ## How to run
 
-Assuming you've taken the steps in the ["Getting started" section](#orgd21b672) above, you can load the processed data related to this submodule by running
+Assuming you've taken the steps in the ["How to run" section](#org1e4e745) above, you can load the processed data related to this submodule by running
 
 ```julia
 using DrWatson
@@ -121,20 +118,33 @@ m_no_pred = ImperialReport13.model(
 
 ### Inference
 
-To perform inference for the model we would simply run the code below:
+To sample and load chains we need to also import `Turing.jl`:
+
+```julia
+using Turing
+```
+
+And choose a set of parameters:
 
 ```julia
 parameters = (
     warmup = 1000,
     steps = 3000
 );
+```
 
+To perform inference for the model we would simply run the code below:
+
+```julia
 chains_posterior = sample(m_no_pred, NUTS(parameters.warmup, 0.95, 10), parameters.steps + parameters.warmup)
 ```
 
 It's worth noting that it takes quite a while to run. Performing inference using `NUTS` using `1000` steps for warmup/adaptation and `3000` sampling steps takes ~1.5-2hrs on a 6-core computer with `JULIA_NUM_THREADS = 6`. If you want to look at the results of such runs, you can find chains which we have run in the `out/` directory. To load these chains, you can do
 
 ```julia
+outdir() = projectdir("out")
+outdir(args...) = projectdir("out", args...)
+
 filenames = [
     relpath(outdir(s)) for s in readdir(outdir())
     if occursin(savename(parameters), s) && occursin("seed", s)
@@ -142,7 +152,7 @@ filenames = [
 length(filenames)
 ```
 
-    4
+    5
 
 ```julia
 chains_posterior_vec = [read(fname, Chains) for fname in filenames]; # Read the different chains
@@ -157,7 +167,7 @@ Now, since we want to look at predictions, we simply re-instantiate the model wi
 
 ```julia
 # Model instance used for prediction
-m = model_def(
+m = ImperialReport13.model(
     turing_data.num_impute,
     turing_data.num_total_days,
     turing_data.cases,
@@ -175,11 +185,11 @@ m = model_def(
 This package provides a convenient method for computing generated quantities from a `Turing.Model` using the given `Chains`:
 
 ```julia
-print(@doc(ImperialReport13.generated_quantities))
+print(@doc(generated_quantities))
 ```
 
     ```
-    generated_quantities(m::Turing.Model, c::Turing.MCMCChains.Chains)
+    generated_quantities(m::Turing.Model, c::MCMCChains.Chains)
     ```
     
     Executes `m` for each of the samples in `c` and returns an array of the values returned by the `m` for each sample.
@@ -189,7 +199,7 @@ print(@doc(ImperialReport13.generated_quantities))
     Often you might have additional quantities computed inside the model that you want to inspect, e.g.
     
     ```julia
-    @model demo(x) = begin
+    @model function demo(x)
         # sample and observe
         θ ~ Prior()
         x ~ Likelihood()
@@ -201,7 +211,7 @@ print(@doc(ImperialReport13.generated_quantities))
     chain = sample(m, alg, n)
     
     # To inspect the `interesting_quantity(θ, x)` where `θ` is replaced by samples from the posterior/`chain`:
-    generated_quantities(m, chain)
+    generated_quantities(m, chain) # <= results in a `Vector` of returned values from `interesting_quantity(θ, x)`
     ```
 
 Therefore we can take the `chains_posterior` we obtained from
