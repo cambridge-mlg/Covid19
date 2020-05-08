@@ -5,7 +5,7 @@ This project will contain ongoing work for modelling related to the ongoing SARS
 
 <a id="orgd21b672"></a>
 
-# Getting started
+# How to run
 
 First off you need to ensure that you have Julia installed. If you do not, head over to the [official JuliaLang website and follow their instructions](https://julialang.org/downloads/platform/). Note that this project requires Julia v1.3 or higher.
 
