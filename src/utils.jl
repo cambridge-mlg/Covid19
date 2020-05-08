@@ -78,7 +78,7 @@ generated_quantities(m, chain) # <= results in a `Vector` of returned values fro
 """
 function generated_quantities(m::Turing.Model, c::MCMCChains.Chains)
     # if `c` is multiple chains we pool them into a single chain
-    chain = length(chains(c)) == 1 ? c : MCMCChains.pool_chain(chains_posterior)
+    chain = length(chains(c)) == 1 ? c : MCMCChains.pool_chain(c)
 
     varinfo = Turing.DynamicPPL.VarInfo(m)
 
