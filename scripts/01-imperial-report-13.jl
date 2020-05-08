@@ -42,19 +42,6 @@ using Random, Dates, Turing, Bijectors
 using Base.Threads
 nthreads()
 
-begin
-    dist = product_distribution(fill(truncated(Normal(3.28, 10), 0, Inf), 14))
-    b = bijector(dist)
-    x = rand(dist)
-
-    # stupid check to make sure that we have the correct versions of Bijectors.jl used WITHIN Turing.jl
-    @assert (invlink(dist, b(x)) ≈ Turing.invlink(dist, b(x))) && (Turing.invlink(dist, b(x)) ≈ x)
-end
-
-begin
-    @assert length(unique(rand(Turing.filldist(Gamma(.1667, 1), 6)))) > 1
-end
-
 using Pkg
 Pkg.status()
 
