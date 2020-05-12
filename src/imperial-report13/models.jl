@@ -562,6 +562,7 @@ end
     # => might has well wrap it in a `@threads` to perform the computation in parallel.
     @threads for m = 1:num_countries
         # Country-specific parameters
+        ifr_noise_m = ifr_noise[m]
         π_m = π[m]
         pop_m = population[m]
         expected_daily_cases_m = expected_daily_cases[m]
@@ -595,7 +596,7 @@ end
 
         expected_daily_deaths_m[1] = 1e-15 * expected_daily_cases_m[1]
         for t = 2:last_time_step
-            expected_daily_deaths_m[t] = sum(expected_daily_cases_m[τ] * π_m[t - τ] * ifr_noise[m] for τ = 1:(t - 1))
+            expected_daily_deaths_m[t] = ifr_noise_m * sum(expected_daily_cases_m[τ] * π_m[t - τ] for τ = 1:(t - 1))
         end
     end
 
