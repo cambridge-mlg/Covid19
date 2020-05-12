@@ -3,7 +3,7 @@
 This project will contain ongoing work for modelling related to the ongoing SARS-CoV-2 crisis.
 
 
-<a id="org1e4e745"></a>
+<a id="org913c5d4"></a>
 
 # How to run
 
@@ -23,6 +23,11 @@ quickactivate(@__DIR__)
 ```
 
 Then to ensure that you have the correct dependencies installed, once you're inside the Julia REPL you can do
+
+```julia
+using Pkg
+Pkg.instantiate()
+```
 
 This will download and install the required packages. Once that is finished, you can import `Covid19`:
 
@@ -46,7 +51,7 @@ Alternatively, to sample from the model with preset parameters, you can run the 
 
 ## How to run
 
-Assuming you've taken the steps in the ["How to run" section](#org1e4e745) above, you can load the processed data related to this submodule by running
+Assuming you've taken the steps in the ["How to run" section](#org913c5d4) above, you can load the processed data related to this submodule by running
 
 ```julia
 using DrWatson
