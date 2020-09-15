@@ -141,7 +141,7 @@ parameters = (
 To perform inference for the model we would simply run the code below:
 
 ```julia
-chains_posterior = sample(m_no_pred, NUTS(parameters.warmup, 0.95, 10), parameters.steps + parameters.warmup)
+chains_posterior = sample(m_no_pred, NUTS(parameters.warmup, 0.95; max_depth=10), parameters.steps + parameters.warmup)
 ```
 
 It's worth noting that it takes quite a while to run. Performing inference using `NUTS` using `1000` steps for warmup/adaptation and `3000` sampling steps takes ~1.5-2hrs on a 6-core computer with `JULIA_NUM_THREADS = 6` (or 2.5~4.5 hrs using a single-thread; high-variance because we're using NUTS). If you want to look at the results of such runs, you can find chains which we have run in the `out/` directory. To load these chains, you can do
