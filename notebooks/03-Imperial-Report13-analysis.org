@@ -233,8 +233,8 @@ For the sake of exposition, we present a compact version of the model here:
   \beta_m & \sim \mathcal{N}(0, \gamma) \quad & \text{for} \quad m = 1, \dots, M \\
   \tilde{\alpha}_k &\sim \mathrm{Gamma}(0.1667, 1) \quad & \text{for} \quad k = 1, \dots, K \\
   \alpha_k &= \tilde{\alpha}_k - \frac{\log(1.05)}{6} \quad & \text{for} \quad  k = 1, \dots, K \\
-  R_{t, m} &= \mu_m \exp(- \beta_m x_{k_{\text{ld}}} - \sum_{k=1}^{K} \alpha_k x_k) \quad & \text{for} \quad m = 1, \dots, M, \ t = 1, \dots, T  \\
-  \tilde{R}_{t, m} &= 1 - \frac{1}{p_m} \sum_{\tau = 1}^{t - 1} c_{\tau, m}  \quad & \text{for} \quad m = 1, \dots, M, \ t = T_{\text{impute}} + 1, \dots, T \\
+  R_{t, m} &= \mu_m \exp\bigg(- \beta_m x_{k_{\text{ld}}} - \sum_{k=1}^{K} \alpha_k x_k\bigg) \quad & \text{for} \quad m = 1, \dots, M, \ t = 1, \dots, T  \\
+  \tilde{R}_{t, m} &= \bigg( 1 - \frac{1}{p_m} \sum_{\tau = 1}^{t - 1} c_{\tau, m} \bigg) R_{t, m}  \quad & \text{for} \quad m = 1, \dots, M, \ t = T_{\text{impute}} + 1, \dots, T \\
   c_{t, m} &= y_m \quad & \text{for} \quad m = 1, \dots, M, \ t = 1, \dots, T_{\text{impute}} \\
   c_{t, m} &= \tilde{R}_{t, m} \sum_{\tau = 1}^{t - 1} c_{\tau, m} s_{t - \tau} \quad & \text{for} \quad m = 1, \dots, M, \ t = T_{\text{impute}} + 1, \dots, T \\
   \varepsilon_m^{\text{ifr}} &\sim \mathcal{N}(1, 0.1)^{ + } \quad & \text{for} \quad m = 1, \dots, M \\
