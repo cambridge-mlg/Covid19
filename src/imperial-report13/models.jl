@@ -617,3 +617,76 @@ end
         Rt_adjusted = Rt_adj
     )
 end
+
+
+#########################
+### Zygote-compatible ###
+#########################
+@model function model_v2_zygote(
+    num_impute,        # [Int] num. of days for which to impute infections
+    num_total_days,    # [Int] days of observed data + num. of days to forecast
+    cases,             # [AbstractVector{<:AbstractVector{<:Int}}] reported cases
+    deaths,            # [AbstractVector{<:AbstractVector{<:Int}}] reported deaths; rows indexed by i > N contain -1 and should be ignored
+    π,                 # [AbstractVector{<:AbstractVector{<:Real}}] h * s
+    covariates,        # [Vector{<:AbstractMatrix}]
+    epidemic_start,    # [AbstractVector{<:Int}]
+    population,        # [AbstractVector{<:Real}]
+    serial_intervals,  # [AbstractVector{<:Real}] fixed pre-calculated serial interval (SI) using empirical data from Neil
+    ::Type{TV} = Vector{Float64}
+) where {TV}
+    # `covariates` should be of length `num_countries` and each entry correspond to a matrix of size `(num_total_days, num_covariates)`
+    num_covariates = size(covariates)[end]
+    num_countries = length(cases)
+    num_obs_countries = length.(cases)
+
+    # Sample variables
+    τ ~ Exponential(1 / 0.03) # Exponential has inverse parameterization of the one in Stan
+    y ~ filldist(Exponential(τ), num_countries)
+    ϕ ~ truncated(Normal(0, 5), 1e-6, 100) # using 100 instead of `Inf` because numerical issues arose
+    κ ~ truncated(Normal(0, 0.5), 1e-6, 100) # In Stan they don't make this truncated, but specify that `κ ≥ 0` and so it will be transformed
+
+    μ₀ ~ filldist(Normal(3.28, κ), num_countries)
+    μ = abs.(μ₀)
+
+    α_hier ~ filldist(Gamma(.1667, 1), num_covariates)
+    α = α_hier .- log(1.05) / 6.
+
+    ifr_noise ~ filldist(truncated(Normal(1., 0.1), 1e-6, 1000), num_countries)
+
+    # Evolve the daily cases
+    daily_cases_pred = evolve(
+        y, μ, α,
+        serial_intervals, population, covariates,
+        num_impute, num_total_days
+    )
+
+    # Compute expected daily deaths
+    expected_daily_deaths = mapreduce(
+        hcat,
+        2:num_total_days,
+        init=1e-15 .* daily_cases_pred[:, 1:1]
+    ) do t
+        ts_prev = 1:t - 1
+        sum(daily_cases_pred[:, ts_prev] .* π[:, reverse(ts_prev)] .* ifr_noise, dims=2)
+    end
+
+
+    ### Stan-equivalent ###
+    # for(m in 1:M){
+    #     for(i in EpidemicStart[m]:N[m]){
+    #         deaths[i,m] ~ neg_binomial_2(E_deaths[i,m],phi);
+    #     }
+    # }
+    for m = 1:num_countries
+        expected_daily_deaths_m = expected_daily_deaths[m, :]
+        ts = epidemic_start[m]:num_obs_countries[m]
+        deaths[m][ts] ~ arraydist(NegativeBinomial2.(expected_daily_deaths_m[ts], ϕ))
+    end
+    # for m = 1:num_countries
+    #     expected_daily_deaths_m = expected_daily_deaths[m, :]
+    #     ts = epidemic_start[m]:num_obs_countries[m]
+    #     deaths[m][ts] ~ NegativeBinomialVectorized2(expected_daily_deaths_m[ts], ϕ)
+    # end
+
+    return daily_cases_pred, expected_daily_deaths
+end
