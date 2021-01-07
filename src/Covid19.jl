@@ -16,10 +16,6 @@ include("io.jl")
 include("utils.jl")           # <= stuff that might also be included by sub-modules
 include("visualization.jl")   # <= visualization stuff
 
-# Compat
-include("compat/cuda.jl")
-include("compat/forwarddiff.jl")
-
 # Different related reports
 include("imperial-report13/ImperialReport13.jl")
 

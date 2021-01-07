@@ -1,6 +1,5 @@
 import ChainRulesCore
 import FillArrays
-import TensorOperations
 
 
 function ChainRulesCore.rrule(
@@ -26,15 +25,15 @@ function ChainRulesCore.rrule(
         end
 
         return (
-            NO_FIELDS,
+            ChainRulesCore.NO_FIELDS,
             vec(sum(Δ .* ∂daily_cases_pred.y, dims=2)),
             vec(sum(Δ .* ∂daily_cases_pred.μ, dims=2)),
             ∇α,
-            Zero(),
-            Zero(),
-            Zero(),
-            Zero(),
-            Zero()
+            ChainRulesCore.Zero(),
+            ChainRulesCore.Zero(),
+            ChainRulesCore.Zero(),
+            ChainRulesCore.Zero(),
+            ChainRulesCore.Zero()
         )
     end
 
