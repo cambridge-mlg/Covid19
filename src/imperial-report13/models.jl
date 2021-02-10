@@ -4,6 +4,9 @@ using Distributions, StatsBase
 using ArgCheck
 using FillArrays
 
+import CUDAExtensions
+import CUDAExtensions.StatsFuns
+
 using Base.Threads
 
 import Turing: filldist
@@ -689,4 +692,117 @@ end
     # end
 
     return daily_cases_pred, expected_daily_deaths
+end
+
+function make_logdensity(
+    ::typeof(model_v2_zygote),
+    num_impute,        # [Int] num. of days for which to impute infections
+    num_total_days,    # [Int] days of observed data + num. of days to forecast
+    cases,             # [AbstractVector{<:AbstractVector{<:Int}}] reported cases
+    deaths,            # [AbstractVector{<:AbstractVector{<:Int}}] reported deaths; rows indexed by i > N contain -1 and should be ignored
+    π,                 # [AbstractVector{<:AbstractVector{<:Real}}] h * s
+    covariates,        # [Vector{<:AbstractMatrix}]
+    epidemic_start,    # [AbstractVector{<:Int}]
+    population,        # [AbstractVector{<:Real}]
+    serial_intervals,  # [AbstractVector{<:Real}] fixed pre-calculated serial interval (SI) using empirical data from Neil
+)
+    num_covariates = size(covariates)[end]
+    num_countries = length(deaths)
+    num_obs_countries = length.(deaths)
+
+    # Prior
+    function logprior(τ, κ, ϕ, y, μ₀, α_hier, ifr_noise)
+        Mod = y isa CuArray ? CUDA : Base
+        Mod_τ = τ isa CuArray ? CUDA : Base
+
+        T = y isa CuArray ? Float32 : eltype(y)
+
+        # @info "logprior" Mod Mod_τ T τ
+
+        # Sample variables
+        # τ ~ Exponential(1 / 0.03) # Exponential has inverse parameterization of the one in Stan
+        # y ~ filldist(Exponential(τ), num_countries)
+        # ϕ ~ truncated(Normal(0, 5), 1e-6, 100) # using 100 instead of `Inf` because numerical issues arose
+        # κ ~ truncated(Normal(0, 0.5), 1e-6, 100) # In Stan they don't make this truncated, but specify that `κ ≥ 0` and so it will be transformed
+        # μ₀ ~ filldist(Normal(3.28, κ), num_countries)
+        # α_hier ~ filldist(Gamma(.1667, 1), num_covariates)
+        # ifr_noise ~ filldist(truncated(Normal(1., 0.1), 1e-6, 1000), num_countries)
+        return (
+            # # logpdf(Exponential(1 / 0.03), τ)
+            let λ = T(inv(1 / 0.03)), x = τ
+            sum(log(λ) .- λ .* x)
+            end
+            # + logpdf(filldist(Exponential(τ), num_countries), y)
+            + let λ = inv.(τ), x = y
+            # HACK: this `log` call might cause some issues as it's not always clear if
+            #  it's on the GPU or not
+            sum(Mod_τ.log.(λ) .- λ .* x)
+            end
+            + sum(CUDAExtensions.truncatednormlogpdf.(one(T), T(5), ϕ, T(1e-6), T(100)))
+            + sum(CUDAExtensions.truncatednormlogpdf.(one(T), T(0.5), κ, T(1e-6), T(100)))
+            # + logpdf(filldist(Normal(3.28, κ), num_countries), μ₀)
+            + sum(StatsFuns.normlogpdf.(T(3.28), κ, μ₀))
+            # + logpdf(filldist(Gamma(.1667, 1), num_covariates), α_hier)
+            + sum(StatsFuns.gammalogpdf.(T(1.667), one(T), α_hier))
+            # + logpdf(filldist(truncated(Normal(1., 0.1), 1e-6, 1000), num_countries), ifr_noise)
+            + sum(CUDAExtensions.truncatednormlogpdf.(one(T), T(0.1), ifr_noise, T(1e-6), T(1000)))
+        )
+    end
+
+    function logprior(θ)
+        @unpack τ, κ, ϕ, y, μ₀, α_hier, ifr_noise = θ
+        return logprior(τ, κ, ϕ, y, μ₀, α_hier, ifr_noise)
+    end
+
+    # Full logdensity
+    function logdensity(τ, κ, ϕ, y, μ₀, α_hier, ifr_noise)
+        lp_prior = logprior(τ, κ, ϕ, y, μ₀, α_hier, ifr_noise)
+
+        # Intermediate values
+        μ = abs.(μ₀)
+        α = α_hier .- log(1.05f0) / 6f0
+
+        # Evolve the daily cases
+        # @info "calling evolve" size(y) size(μ) size(α) size(serial_intervals) size(population) size(covariates)
+        daily_cases_pred = evolve(
+            y, μ, α,
+            serial_intervals, population, covariates,
+            num_impute, num_total_days
+        )
+
+        # Compute expected daily deaths
+        # TODO: implement custom adjoint?
+        expected_daily_deaths = mapreduce(hcat, 2:num_total_days, init=1f-15 .* daily_cases_pred[:, 1:1]) do t
+            ts_prev = 1:t - 1
+            sum(daily_cases_pred[:, ts_prev] .* π[:, reverse(ts_prev)] .* ifr_noise, dims=2)
+        end
+
+        ### Stan-equivalent ###
+        # for(m in 1:M){
+        #     for(i in EpidemicStart[m]:N[m]){
+        #         deaths[i,m] ~ neg_binomial_2(E_deaths[i,m],phi);
+        #     }
+        # }
+        
+        lp = lp_prior
+        for m = 1:num_countries
+            expected_daily_deaths_m = expected_daily_deaths[m, :]
+            ts = epidemic_start[m]:num_obs_countries[m]
+            # deaths[m][ts] ~ arraydist(NegativeBinomial2.(expected_daily_deaths_m[ts], ϕ))
+            lp += logpdf(NegativeBinomialVectorized2(expected_daily_deaths_m[ts], ϕ), deaths[m][ts])
+        end
+        return lp
+    end
+    
+    function logdensity(θ)
+        @unpack τ, κ, ϕ, y, μ₀, α_hier, ifr_noise = θ
+        return logdensity(τ, κ, ϕ, y, μ₀, α_hier, ifr_noise)
+    end
+    
+    function logdensity(θ, axes)
+        @unpack τ, κ, ϕ, y, μ₀, α_hier, ifr_noise = axes
+        return logdensity(θ[τ], θ[κ], θ[ϕ], θ[y], θ[μ₀], θ[α_hier], θ[ifr_noise])
+    end
+    
+    return logdensity #, logprior
 end
