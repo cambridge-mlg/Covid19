@@ -24,6 +24,9 @@ argtable = ArgParseSettings(
     action = :store_true
     "--cpu-only"
     action = :store_true
+    "--num-blas-threads"
+    arg_type = Int
+    default = 0
     "model"
     help = "model to use"
     required = true
@@ -31,6 +34,9 @@ end
 
 parsed_args = parse_args(ARGS, argtable)
 @info parsed_args
+
+using LinearAlgebra
+(parsed_args["num-blas-threads"] > 0) && BLAS.set_num_threads(parsed_args["num-blas-threads"])
 
 ############
 ### CODE ###
