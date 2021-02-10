@@ -20,6 +20,10 @@ argtable = ArgParseSettings(
     help = "highest multiple of countries to benchmark"
     arg_type = Int
     default = 5
+    "--gpu-only"
+    action = :store_true
+    "--cpu-only"
+    action = :store_true
     "model"
     help = "model to use"
     required = true
@@ -31,7 +35,7 @@ parsed_args = parse_args(ARGS, argtable)
 ############
 ### CODE ###
 ############
-using Revise, Covid19
+using Covid19
 using DrWatson, Turing, Random, CUDA, Zygote
 using BenchmarkTools
 
@@ -128,24 +132,28 @@ repeats = map(x -> x^2, parsed_args["start"]:parsed_args["end"])
 # repeats = map(x -> x^2, 1:2)
 experiments = Dict(:repeats => repeats, :results => Dict())
 
-let T = Float64, iscuda = false, nt = iscuda ? nt_cu : nt
-    experiments[:results][(T, iscuda)] = map(repeats) do num_repeat_countries
-        @info "Testing $((T, iscuda)) with multiple $(num_repeat_countries)"
-        return benchmark(model_def, nt, data, num_repeat_countries, T, iscuda)
+if !parsed_args["gpu-only"]
+    let T = Float64, iscuda = false, nt = iscuda ? nt_cu : nt
+        experiments[:results][(T, iscuda)] = map(repeats) do num_repeat_countries
+            @info "Testing $((T, iscuda)) with multiple $(num_repeat_countries)"
+            return benchmark(model_def, nt, data, num_repeat_countries, T, iscuda)
+        end
+    end
+
+    let T = Float32, iscuda = false, nt = iscuda ? nt_cu : nt
+        experiments[:results][(T, iscuda)] = map(repeats) do num_repeat_countries
+            @info "Testing $((T, iscuda)) with multiple $(num_repeat_countries)"
+            return benchmark(model_def, nt, data, num_repeat_countries, T, iscuda)
+        end
     end
 end
 
-let T = Float32, iscuda = false, nt = iscuda ? nt_cu : nt
-    experiments[:results][(T, iscuda)] = map(repeats) do num_repeat_countries
-        @info "Testing $((T, iscuda)) with multiple $(num_repeat_countries)"
-        return benchmark(model_def, nt, data, num_repeat_countries, T, iscuda)
-    end
-end
-
-let T = Float32, iscuda = true, nt = iscuda ? nt_cu : nt
-    experiments[:results][(T, iscuda)] = map(repeats) do num_repeat_countries
-        @info "Testing $((T, iscuda)) with multiple $(num_repeat_countries)"
-        return benchmark(model_def, nt, data, num_repeat_countries, T, iscuda)
+if !parsed_args["cpu-only"]
+    let T = Float32, iscuda = true, nt = iscuda ? nt_cu : nt
+        experiments[:results][(T, iscuda)] = map(repeats) do num_repeat_countries
+            @info "Testing $((T, iscuda)) with multiple $(num_repeat_countries)"
+            return benchmark(model_def, nt, data, num_repeat_countries, T, iscuda)
+        end
     end
 end
 
