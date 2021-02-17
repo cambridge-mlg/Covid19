@@ -713,7 +713,6 @@ function make_logdensity(
     # Prior
     function logprior(τ, κ, ϕ, y, μ₀, α_hier, ifr_noise)
         Mod = y isa CuArray ? CUDA : Base
-        Mod_τ = τ isa CuArray ? CUDA : Base
 
         T = y isa CuArray ? Float32 : eltype(y)
 
@@ -736,7 +735,7 @@ function make_logdensity(
             + let λ = inv.(τ), x = y
             # HACK: this `log` call might cause some issues as it's not always clear if
             #  it's on the GPU or not
-            sum(Mod_τ.log.(λ) .- λ .* x)
+            sum(log.(λ) .- λ .* x)
             end
             + sum(CUDAExtensions.truncatednormlogpdf.(one(T), T(5), ϕ, T(1e-6), T(100)))
             + sum(CUDAExtensions.truncatednormlogpdf.(one(T), T(0.5), κ, T(1e-6), T(100)))
