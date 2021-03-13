@@ -36,7 +36,9 @@ parsed_args = parse_args(ARGS, argtable)
 @info parsed_args
 
 using LinearAlgebra
-(parsed_args["num-blas-threads"] > 0) && BLAS.set_num_threads(parsed_args["num-blas-threads"])
+if (parsed_args["num-blas-threads"] > 0)
+    BLAS.set_num_threads(parsed_args["num-blas-threads"])
+end
 
 ############
 ### CODE ###
@@ -115,13 +117,14 @@ nt = map(DynamicPPL.tonamedtuple(vi_cpu)) do (v, ks)
     end
 end
 
-nt = map(nt) do x
+nt_64 = nt
+nt_32 = map(nt) do x
     Float32.(x)
 end
 
 
 # Create one for CUDA
-nt_cu = cu(nt)
+nt_cu = cu(nt32)
 
 # Try out
 # setup_args = ImperialReport13.setup_data(model_def, data.turing_data; T = Float32, iscuda = true);
@@ -139,26 +142,35 @@ repeats = map(x -> x^2, parsed_args["start"]:parsed_args["end"])
 experiments = Dict(:repeats => repeats, :results => Dict())
 
 if !parsed_args["gpu-only"]
-    let T = Float64, iscuda = false, nt = iscuda ? nt_cu : nt
+    let T = Float64, iscuda = false, nt = iscuda ? nt_cu : (T == Float32 ? nt_32 : nt_64)
         experiments[:results][(T, iscuda)] = map(repeats) do num_repeat_countries
             @info "Testing $((T, iscuda)) with multiple $(num_repeat_countries)"
-            return benchmark(model_def, nt, data, num_repeat_countries, T, iscuda)
+            return benchmark(
+                model_def, nt, data, num_repeat_countries, T, iscuda;
+                seconds=parsed_args["seconds"], samples=parsed_args["samples"]
+            )
         end
     end
 
-    let T = Float32, iscuda = false, nt = iscuda ? nt_cu : nt
+    let T = Float32, iscuda = false, nt = iscuda ? nt_cu : (T == Float32 ? nt_32 : nt_64)
         experiments[:results][(T, iscuda)] = map(repeats) do num_repeat_countries
             @info "Testing $((T, iscuda)) with multiple $(num_repeat_countries)"
-            return benchmark(model_def, nt, data, num_repeat_countries, T, iscuda)
+            return benchmark(
+                model_def, nt, data, num_repeat_countries, T, iscuda;
+                seconds=parsed_args["seconds"], samples=parsed_args["samples"]
+            )
         end
     end
 end
 
 if !parsed_args["cpu-only"]
-    let T = Float32, iscuda = true, nt = iscuda ? nt_cu : nt
+    let T = Float32, iscuda = true, nt = iscuda ? nt_cu : (T == Float32 ? nt_32 : nt_64)
         experiments[:results][(T, iscuda)] = map(repeats) do num_repeat_countries
             @info "Testing $((T, iscuda)) with multiple $(num_repeat_countries)"
-            return benchmark(model_def, nt, data, num_repeat_countries, T, iscuda)
+            return benchmark(
+                model_def, nt, data, num_repeat_countries, T, iscuda;
+                seconds=parsed_args["seconds"], samples=parsed_args["samples"]
+            )
         end
     end
 end
