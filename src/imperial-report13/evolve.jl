@@ -1,7 +1,7 @@
 function evolve(
-        y, μ, α,
-        serial_intervals, population, covariates,
-        num_impute, num_total_days
+    y, μ, α,
+    serial_intervals, population, covariates,
+    num_impute, num_total_days
 )
     mod = y isa CuArray ? CUDA : Base
 
@@ -39,7 +39,7 @@ function ∂evolve(y, μ, α, serial_intervals, population, covariates, num_impu
     # Pre-allocate `daily_cases_pred` and `cases_pred`
     T = typejoin(eltype(y), eltype(μ), eltype(α)) # TODO: improve?
     daily_cases_pred = mod.zeros(T, num_countries, num_total_days)
-    cases_pred = mod.zeros(T, num_countries, num_total_days)
+    # cases_pred = mod.zeros(T, num_countries, num_total_days)
 
     # Pre-allocate the gradients
     ∂daily_cases_pred = (
@@ -53,13 +53,15 @@ function ∂evolve(y, μ, α, serial_intervals, population, covariates, num_impu
 
     # Compute `daily_cases_pred` and `cases_pred`
     daily_cases_pred[:, 1:num_impute] .= y
-    cases_pred[:, 1:num_impute] = cumsum(daily_cases_pred[:, 1:num_impute]; dims = 2) .- y
+    # cases_pred[:, 1:num_impute] = cumsum(daily_cases_pred[:, 1:num_impute]; dims = 2) .- y
 
     for t = (num_impute + 1):num_total_days
-        cases_pred[:, t] = cases_pred[:, t - 1] + daily_cases_pred[:, t - 1]
+        # cases_pred[:, t] = cases_pred[:, t - 1] + daily_cases_pred[:, t - 1]
+        # cases_pred_t = cases_pred[:, t]
+        cases_pred_t = sum(daily_cases_pred[:, 1:t - 1]; dims = 2)
 
         Rₜ = μ .* exp.(covariates[t, :, :] * (-α))
-        R_scale = (clamp.(population .- cases_pred[:, t], zero(T), Inf) ./ population)
+        R_scale = (clamp.(population .- cases_pred_t, zero(T), Inf) ./ population)
         Rₜ_adj = R_scale .* Rₜ
 
         ts_prev = 1:t - 1
@@ -69,14 +71,14 @@ function ∂evolve(y, μ, α, serial_intervals, population, covariates, num_impu
         # ∂c∂y
         ∂R̂∂y = - (Rₜ ./ population) .* sum(∂daily_cases_pred.y[:, ts_prev], dims=2)
         ∂daily_cases_pred.y[:, t] = (
-              ∂R̂∂y .* r
+            ∂R̂∂y .* r
             + Rₜ_adj .* (∂daily_cases_pred.y[:, ts_prev] * serial_intervals[reverse(ts_prev)])
         )
 
         # ∂c∂μ
         ∂R̂∂u = (Rₜ_adj ./ μ) - (Rₜ ./ population) .* sum(∂daily_cases_pred.μ[:, ts_prev], dims=2)
         ∂daily_cases_pred.μ[:, t] = (
-              ∂R̂∂u .* r
+            ∂R̂∂u .* r
             + Rₜ_adj .* (∂daily_cases_pred.μ[:, ts_prev] * serial_intervals[reverse(ts_prev)])
         )
 
