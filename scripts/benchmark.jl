@@ -20,13 +20,15 @@ argtable = ArgParseSettings(
     help = "highest multiple of countries to benchmark"
     arg_type = Int
     default = 5
-    "--gpu-only"
+    "--gpu"
     action = :store_true
-    "--cpu-only"
-    action = :store_true
+    "--type"
+    default="Float64"
     "--num-blas-threads"
     arg_type = Int
     default = 0
+    "--gc"
+    action = :store_true
     "model"
     help = "model to use"
     required = true
@@ -46,6 +48,7 @@ end
 using Covid19
 using DrWatson, Turing, Random, CUDA, Zygote
 using BenchmarkTools
+using ProgressMeter
 
 CUDA.allowscalar(false)
 
@@ -54,7 +57,7 @@ model_def = eval(Meta.parse(parsed_args["model"]))
 @info "Benchmarking $(model_def)" 
 
 
-function benchmark(model_def, nt, data, num_repeat_countries, T, iscuda; seconds=10, samples=1000)
+function benchmark(model_def, nt, data, num_repeat_countries, T, iscuda; seconds=10, samples=1000, forcegc=false)
     # Setup
     setup_args = ImperialReport13.setup_data(
         model_def,
@@ -69,9 +72,24 @@ function benchmark(model_def, nt, data, num_repeat_countries, T, iscuda; seconds
         num_repeat_countries = num_repeat_countries
     );
 
+    # HACK: attempt at fixing high GC usage causing discepancies.
+    # Is this the right thing to do?
+    forcegc && GC.gc(true)
+
     # Benchmark
-    eval_results = @benchmark $(logπ)($(args)...) seconds=seconds samples=samples
-    grad_results = @benchmark $(Zygote.gradient)($(logπ), $(args)...) seconds=seconds samples=samples
+    eval_results = if iscuda
+        @benchmark CUDA.@sync($(logπ)($(args)...)) seconds=seconds samples=samples
+    else
+        @benchmark $(logπ)($(args)...) seconds=seconds samples=samples
+    end
+
+    forcegc && GC.gc(true)
+
+    grad_results = if iscuda
+        @benchmark CUDA.@sync($(Zygote.gradient)($(logπ), $(args)...)) seconds=seconds samples=samples
+    else
+        @benchmark $(Zygote.gradient)($(logπ), $(args)...) seconds=seconds samples=samples
+    end
     
     return (eval = eval_results, grad = grad_results)
 end
@@ -139,40 +157,23 @@ nt_cu = cu(nt32)
 
 repeats = map(x -> x^2, parsed_args["start"]:parsed_args["end"])
 # repeats = map(x -> x^2, 1:2)
-experiments = Dict(:repeats => repeats, :results => Dict())
+experiments = Dict(:args => parsed_args, :repeats => repeats, :results => Dict())
 
-if !parsed_args["gpu-only"]
-    let T = Float64, iscuda = false, nt = iscuda ? nt_cu : (T == Float32 ? nt_32 : nt_64)
-        experiments[:results][(T, iscuda)] = map(repeats) do num_repeat_countries
-            @info "Testing $((T, iscuda)) with multiple $(num_repeat_countries)"
-            return benchmark(
-                model_def, nt, data, num_repeat_countries, T, iscuda;
-                seconds=parsed_args["seconds"], samples=parsed_args["samples"]
-            )
-        end
-    end
+T = eval(Meta.parse(parsed_args["type"]))
+iscuda = parsed_args["gpu"]
+nt = iscuda ? nt_cu : (T == Float32 ? nt_32 : nt_64)
 
-    let T = Float32, iscuda = false, nt = iscuda ? nt_cu : (T == Float32 ? nt_32 : nt_64)
-        experiments[:results][(T, iscuda)] = map(repeats) do num_repeat_countries
-            @info "Testing $((T, iscuda)) with multiple $(num_repeat_countries)"
-            return benchmark(
-                model_def, nt, data, num_repeat_countries, T, iscuda;
-                seconds=parsed_args["seconds"], samples=parsed_args["samples"]
-            )
-        end
-    end
-end
+experiments[:results] = NamedTuple[]
 
-if !parsed_args["cpu-only"]
-    let T = Float32, iscuda = true, nt = iscuda ? nt_cu : (T == Float32 ? nt_32 : nt_64)
-        experiments[:results][(T, iscuda)] = map(repeats) do num_repeat_countries
-            @info "Testing $((T, iscuda)) with multiple $(num_repeat_countries)"
-            return benchmark(
-                model_def, nt, data, num_repeat_countries, T, iscuda;
-                seconds=parsed_args["seconds"], samples=parsed_args["samples"]
-            )
-        end
-    end
+@showprogress for num_repeat_countries in repeats
+    parsed_args["gc"] && GC.gc(true)
+
+    bres = benchmark(
+        model_def, nt, data, num_repeat_countries, T, iscuda;
+        seconds=parsed_args["seconds"], samples=parsed_args["samples"],
+        forcegc=parsed_args["gc"]
+    )
+    push!(experiments[:results], bres)
 end
 
 println(experiments)
@@ -182,23 +183,6 @@ import Dates, JSON
 outdir() = projectdir("out")
 outdir(args...) = projectdir("out", args...)
 
-basename = "CPU-vs-GPU-$(Dates.now())"
+basename = "$(Dates.now())_$(savename(parsed_args))"
 @info "Saving results in $(basename)"
 write(outdir("benchmarks", "$(basename).json"), JSON.json(experiments))
-
-function jsonify(experiments)
-    res = Dict()
-    res["repeats"] = experiments[:repeats]
-    res["results"] = Dict()
-    for k in keys(experiments[:results])
-        result = experiments[:results][k]
-        res["results"][k] = Dict(
-            "eval" => map(x -> median(x).time / 1e9, Covid19.vectup2tupvec(result).eval),
-            "grad" => map(x -> median(x).time / 1e9, Covid19.vectup2tupvec(result).grad)
-        )
-    end
-    
-    return res
-end
-
-write(outdir("benchmarks", "$(basename)-simple.json"), JSON.json(jsonify(experiments)))
